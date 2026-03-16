@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Enums\RoleEnum;
 use App\Models\Area;
 use App\Models\AreaMember;
+use App\Models\Meeting;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
@@ -75,6 +76,16 @@ class DatabaseSeeder extends Seeder
             'assigned_by' => $admin->id,
             'joined_at' => now(),
             'is_active' => true,
+        ]);
+
+        // Create sample meeting
+        Meeting::create([
+            'title' => 'Reunión de kickoff',
+            'meeting_date' => now(),
+            'area_id' => $area->id,
+            'classification' => 'operational',
+            'notes' => 'Primera reunión del equipo',
+            'created_by' => $admin->id,
         ]);
     }
 }

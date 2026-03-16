@@ -9,13 +9,16 @@ use App\Http\Requests\RejectTaskRequest;
 use App\Http\Requests\StoreTaskAttachmentRequest;
 use App\Http\Requests\StoreTaskCommentRequest;
 use App\Http\Requests\StoreTaskRequest;
+use App\Http\Requests\StoreTaskUpdateRequest;
 use App\Http\Requests\UpdateTaskRequest;
 use App\Http\Resources\TaskAttachmentResource;
 use App\Http\Resources\TaskCommentResource;
 use App\Http\Resources\TaskResource;
+use App\Http\Resources\TaskUpdateResource;
 use App\Models\Task;
 use App\Models\TaskAttachment;
 use App\Models\TaskComment;
+use App\Models\TaskUpdate;
 use App\Services\TaskCompletionService;
 use App\Services\TaskCreationService;
 use App\Services\TaskDelegationService;
@@ -79,12 +82,14 @@ class TaskController extends Controller
                 'delegator',
                 'currentResponsible',
                 'area',
+                'meeting',
                 'comments.user',
                 'attachments.uploader',
                 'delegations.fromUser',
                 'delegations.toUser',
                 'statusHistory.changedByUser',
-            ])->loadCount(['comments', 'attachments'])
+                'updates.user',
+            ])->loadCount(['comments', 'attachments', 'updates'])
         );
     }
 
@@ -180,6 +185,26 @@ class TaskController extends Controller
 
         return response()->json(
             new TaskAttachmentResource($attachment->load('uploader')),
+            201
+        );
+    }
+
+    public function addUpdate(StoreTaskUpdateRequest $request, Task $task): JsonResponse
+    {
+        $update = TaskUpdate::create([
+            'task_id' => $task->id,
+            'user_id' => $request->user()->id,
+            'update_type' => $request->update_type ?? 'progress',
+            'comment' => $request->comment,
+            'progress_percent' => $request->progress_percent,
+        ]);
+
+        if ($request->progress_percent !== null) {
+            $task->update(['progress_percent' => $request->progress_percent]);
+        }
+
+        return response()->json(
+            new TaskUpdateResource($update->load('user')),
             201
         );
     }

@@ -28,6 +28,11 @@ class StoreTaskRequest extends FormRequest
             'requires_manager_approval' => ['sometimes', 'boolean'],
             'requires_completion_notification' => ['sometimes', 'boolean'],
             'requires_due_date' => ['sometimes', 'boolean'],
+            'requires_progress_report' => ['sometimes', 'boolean'],
+            'notify_on_due' => ['sometimes', 'boolean'],
+            'notify_on_overdue' => ['sometimes', 'boolean'],
+            'notify_on_completion' => ['sometimes', 'boolean'],
+            'meeting_id' => ['nullable', 'exists:meetings,id'],
         ];
     }
 }

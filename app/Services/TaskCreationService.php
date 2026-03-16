@@ -36,6 +36,11 @@ class TaskCreationService
                 'requires_manager_approval' => $data['requires_manager_approval'] ?? false,
                 'requires_completion_notification' => $data['requires_completion_notification'] ?? false,
                 'requires_due_date' => $data['requires_due_date'] ?? false,
+                'requires_progress_report' => $data['requires_progress_report'] ?? false,
+                'notify_on_due' => $data['notify_on_due'] ?? false,
+                'notify_on_overdue' => $data['notify_on_overdue'] ?? false,
+                'notify_on_completion' => $data['notify_on_completion'] ?? false,
+                'meeting_id' => $data['meeting_id'] ?? null,
             ]);
 
             TaskStatusHistory::create([

@@ -2,7 +2,9 @@
 
 ## Overview
 
-API REST para el sistema de gestión de tareas **TAPE**, construida con **Laravel 12** y diseñada para conectarse a **Supabase** (PostgreSQL). Autenticación basada en tokens via **Laravel Sanctum**.
+API REST para el sistema de gestión de compromisos y tareas **TAPE**, construida con **Laravel 12** y diseñada para conectarse a **Supabase** (PostgreSQL). Autenticación basada en tokens via **Laravel Sanctum**.
+
+El sistema reemplaza un proceso manual basado en Excel, proporcionando: registro individual de compromisos, seguimiento de avances, notificaciones automáticas consolidadas por responsable, dashboards analíticos y trazabilidad completa.
 
 ---
 
@@ -16,6 +18,7 @@ API REST para el sistema de gestión de tareas **TAPE**, construida con **Larave
 | Autenticación    | Laravel Sanctum (tokens)|
 | Tests            | PHPUnit 11 (SQLite :memory:) |
 | Rate Limiting    | 60 requests/minuto      |
+| Scheduler        | Laravel Scheduler (cron)|
 
 ---
 
@@ -44,10 +47,11 @@ php artisan migrate --seed
 
 El seeder crea:
 - 3 roles: `superadmin`, `area_manager`, `worker`
-- 1 superadmin: `admin@tape.com` / `password`
-- 1 encargado: `manager@tape.com` / `password`
+- 1 superadmin: `admin@tape.test` / `Password1`
+- 1 encargado: `manager@tape.test` / `Password1`
 - 2 trabajadores
 - 1 área con membresías
+- 1 reunión de ejemplo
 
 ### 3. Tests
 
@@ -57,7 +61,20 @@ php artisan test
 php vendor/bin/phpunit --testdox
 ```
 
-51 tests, 101 assertions — todos pasando.
+80 tests, 187 assertions — todos pasando.
+
+### 4. Scheduler (producción)
+
+Agregar al crontab del servidor:
+
+```bash
+* * * * * cd /path-to-project && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Comandos programados:
+- `tasks:detect-overdue` — 06:00 diario
+- `tasks:send-daily-summary` — 07:00 diario
+- `tasks:send-due-reminders` — 08:00 diario
 
 ---
 
@@ -65,13 +82,14 @@ php vendor/bin/phpunit --testdox
 
 ```
 app/
-├── Enums/              # TaskStatusEnum, TaskPriorityEnum, RoleEnum, etc.
+├── Console/Commands/   # DetectOverdueTasks, SendDailyTaskSummary, SendDueReminders
+├── Enums/              # TaskStatusEnum, TaskPriorityEnum, RoleEnum, UpdateTypeEnum, etc.
 ├── Http/
-│   ├── Controllers/    # AuthController, UserController, AreaController, TaskController
+│   ├── Controllers/    # Auth, User, Area, Meeting, Task, Dashboard
 │   ├── Requests/       # Form Requests con validación y autorización
 │   └── Resources/      # API Resources para respuestas JSON consistentes
 ├── Models/             # Eloquent models con relaciones
-├── Policies/           # TaskPolicy, AreaPolicy, UserPolicy
+├── Policies/           # TaskPolicy, AreaPolicy, UserPolicy, MeetingPolicy
 ├── Providers/          # AppServiceProvider
 └── Services/           # Lógica de negocio (TaskCreationService, etc.)
 ```
@@ -109,10 +127,21 @@ app/
 - Campos: `area_id`, `user_id`, `assigned_by`, `claimed_by`, `joined_at`, `left_at`, `is_active`
 
 ### Task (SoftDeletes)
-- `belongsTo` creator, assignedUser, assignedArea, delegatedBy, currentResponsible, area, closedBy, cancelledBy
-- `hasMany` comments, attachments, statusHistory, delegations
-- Campos de configuración: `requires_attachment`, `requires_completion_comment`, `requires_manager_approval`, `requires_completion_notification`, `requires_due_date`
+- `belongsTo` creator, assignedUser, assignedArea, delegatedBy, currentResponsible, area, closedBy, cancelledBy, meeting
+- `hasMany` comments, attachments, statusHistory, delegations, updates
+- Campos de configuración: `requires_attachment`, `requires_completion_comment`, `requires_manager_approval`, `requires_completion_notification`, `requires_due_date`, `requires_progress_report`
+- Campos de notificación: `notify_on_due`, `notify_on_overdue`, `notify_on_completion`
+- Campos de seguimiento: `progress_percent`, `meeting_id`
 - Casts: `status` → `TaskStatusEnum`, `priority` → `TaskPriorityEnum`
+
+### Meeting
+- `belongsTo` Area, creator (User)
+- `hasMany` Tasks
+- Campos: `title`, `meeting_date`, `area_id`, `classification` (MeetingClassificationEnum), `notes`, `created_by`
+
+### TaskUpdate
+- `belongsTo` Task, User
+- Campos: `task_id`, `user_id`, `update_type` (UpdateTypeEnum), `comment`, `progress_percent`
 
 ### TaskDelegation
 - `belongsTo` Task, fromUser, toUser
@@ -142,9 +171,10 @@ Transiciones permitidas:
 | draft                | pending_assignment, pending, cancelled               |
 | pending_assignment   | pending, cancelled                                   |
 | pending              | in_progress, cancelled                               |
-| in_progress          | in_review, completed, cancelled                      |
-| in_review            | completed, rejected                                  |
-| rejected             | in_progress                                          |
+| in_progress          | in_review, completed, cancelled, overdue             |
+| in_review            | completed, rejected, cancelled                       |
+| rejected             | in_progress, cancelled                               |
+| overdue              | in_progress, cancelled                               |
 
 ### TaskPriorityEnum
 `low`, `medium`, `high`, `urgent`
@@ -157,6 +187,12 @@ Transiciones permitidas:
 
 ### AttachmentTypeEnum
 `evidence`, `support`, `final_delivery`
+
+### UpdateTypeEnum
+`progress`, `evidence`, `note`
+
+### MeetingClassificationEnum
+`strategic`, `operational`, `follow_up`, `review`, `other`
 
 ---
 
@@ -212,6 +248,25 @@ Base URL: `/api`
 | POST   | `/tasks/{id}/cancel`              | Cancelar tarea                 | superadmin       |
 | POST   | `/tasks/{id}/comment`             | Agregar comentario             | según visibilidad |
 | POST   | `/tasks/{id}/attachments`         | Subir adjunto                  | según visibilidad |
+| POST   | `/tasks/{id}/updates`             | Reportar avance/progreso       | responsable, manager, superadmin |
+
+### Reuniones
+
+| Método | Endpoint                    | Descripción               | Roles permitidos |
+|--------|-----------------------------|---------------------------|-----------------|
+| GET    | `/meetings`                 | Listar reuniones          | superadmin, area_manager |
+| POST   | `/meetings`                 | Crear reunión             | superadmin, area_manager |
+| GET    | `/meetings/{id}`            | Ver reunión con tareas    | según visibilidad |
+| PUT    | `/meetings/{id}`            | Actualizar reunión        | creador, superadmin |
+| DELETE | `/meetings/{id}`            | Eliminar reunión          | superadmin       |
+
+### Dashboard
+
+| Método | Endpoint                    | Descripción                        | Roles permitidos |
+|--------|-----------------------------|-----------------------------------|-----------------|
+| GET    | `/dashboard/general`        | Dashboard gerencial general       | superadmin       |
+| GET    | `/dashboard/area/{id}`      | Dashboard por área                | superadmin, manager del área |
+| GET    | `/dashboard/me`             | Dashboard personal del usuario    | todos            |
 
 ---
 
@@ -260,6 +315,48 @@ Antes de enviar a revisión (`submit-review`), se valida:
 - Solo un `area_manager` puede reclamar.
 - El usuario reclamado debe tener rol `worker`.
 - El trabajador no debe tener ya un área activa.
+
+### Reuniones como Origen de Compromisos
+- Las tareas pueden tener un `meeting_id` vinculándolas a una reunión de origen.
+- Las reuniones se clasifican por tipo: estratégica, operativa, seguimiento, revisión, otra.
+- Al ver una reunión, se listan todas las tareas asociadas.
+
+### Seguimiento y Avances (Task Updates)
+- El responsable puede reportar avances con comentario, porcentaje y tipo de actualización.
+- El porcentaje de progreso se sincroniza automáticamente con la tarea.
+- El encargado de área también puede agregar notas de seguimiento.
+- Si `requires_progress_report = true`, la tarea exige reportes de avance.
+
+### Notificaciones Automáticas
+- `notify_on_due` — Alerta cuando la fecha de entrega está próxima (3 días).
+- `notify_on_overdue` — Alerta cuando la tarea está vencida.
+- `notify_on_completion` — Notificación al completar.
+- El comando `tasks:detect-overdue` cambia automáticamente el estado a `overdue`.
+- El comando `tasks:send-daily-summary` envía resúmenes consolidados por responsable.
+- El comando `tasks:send-due-reminders` envía recordatorios individuales por tarea.
+
+### Dashboard Gerencial (`/dashboard/general`)
+Retorna:
+- Tareas por estado y por área
+- Total activas, completadas, vencidas, próximas a vencer
+- Tasa de cierre (%)
+- Promedio de días para cerrar
+- Top 10 responsables con más carga
+- Completadas este mes
+
+### Dashboard por Área (`/dashboard/area/{id}`)
+Retorna:
+- Tareas por estado del área
+- Vencidas del área
+- Distribución por responsable
+- Tasa de cierre del área
+- Tareas sin reportes de avance
+
+### Dashboard Personal (`/dashboard/me`)
+Retorna:
+- Tareas activas, vencidas, próximas a vencer, completadas
+- Distribución por estado
+- Lista de tareas próximas ordenadas por fecha de vencimiento
 
 ---
 
@@ -350,14 +447,18 @@ Antes de enviar a revisión (`submit-review`), se valida:
 
 ## Tests
 
-51 tests organizados por feature:
+80 tests organizados por feature:
 
-| Suite       | Tests | Cobertura                                                                |
-|-------------|-------|--------------------------------------------------------------------------|
-| AuthTest    | 5     | Login, logout, perfil, credenciales inválidas, usuario inactivo          |
-| UserTest    | 7     | CRUD, cambio de rol, activar/desactivar, validaciones                    |
-| AreaTest    | 6     | CRUD, asignar encargado, reclamar trabajador, validaciones               |
-| TaskTest    | 15    | CRUD, delegación, flujo completo de estados, adjuntos, comentarios, validaciones de requeridos |
+| Suite               | Tests | Cobertura                                                                |
+|---------------------|-------|--------------------------------------------------------------------------|
+| AuthTest            | 5     | Login, logout, perfil, credenciales inválidas, usuario inactivo          |
+| UserTest            | 7     | CRUD, cambio de rol, activar/desactivar, validaciones                    |
+| AreaTest            | 6     | CRUD, asignar encargado, reclamar trabajador, validaciones               |
+| MeetingTest         | 10    | CRUD, permisos, vinculación con tareas, filtrado por área                |
+| TaskTest            | 15    | CRUD, delegación, flujo completo de estados, adjuntos, comentarios       |
+| TaskUpdateTest      | 6     | Avances, validaciones, permisos, sincronización de progreso              |
+| DashboardTest       | 7     | Dashboard general, por área, personal, permisos, métricas de vencimiento |
+| ScheduledCommandsTest| 5    | Detección overdue, resumen diario, recordatorios, flags de notificación  |
 
 Todos los tests usan `RefreshDatabase` con SQLite in-memory para velocidad.
 
@@ -378,3 +479,16 @@ Todos los tests usan `RefreshDatabase` con SQLite in-memory para velocidad.
 | 9     | task_notifications      | Notificaciones de cumplimiento        |
 | 10    | task_status_history     | Historial de cambios de estado        |
 | 11    | activity_logs           | Log de auditoría general              |
+| 12    | meetings                | Reuniones / origen de compromisos     |
+| 13    | tasks (modificación)    | Agrega `meeting_id`, flags de notificación, `progress_percent` |
+| 14    | task_updates            | Reportes de avance/seguimiento        |
+
+---
+
+## Comandos Artisan
+
+| Comando                       | Descripción                                           | Horario     |
+|-------------------------------|-------------------------------------------------------|-------------|
+| `tasks:detect-overdue`        | Marca como vencidas las tareas pasadas de fecha        | 06:00 diario|
+| `tasks:send-daily-summary`    | Genera resúmenes consolidados por responsable          | 07:00 diario|
+| `tasks:send-due-reminders`    | Envía recordatorios para tareas próximas a vencer      | 08:00 diario|

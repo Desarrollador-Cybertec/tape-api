@@ -36,6 +36,12 @@ class Task extends Model
         'completion_notified_at',
         'closed_by',
         'cancelled_by',
+        'meeting_id',
+        'requires_progress_report',
+        'notify_on_due',
+        'notify_on_overdue',
+        'notify_on_completion',
+        'progress_percent',
     ];
 
     protected function casts(): array
@@ -52,6 +58,11 @@ class Task extends Model
             'requires_manager_approval' => 'boolean',
             'requires_completion_notification' => 'boolean',
             'requires_due_date' => 'boolean',
+            'requires_progress_report' => 'boolean',
+            'notify_on_due' => 'boolean',
+            'notify_on_overdue' => 'boolean',
+            'notify_on_completion' => 'boolean',
+            'progress_percent' => 'integer',
         ];
     }
 
@@ -125,6 +136,16 @@ class Task extends Model
     public function notifications(): HasMany
     {
         return $this->hasMany(TaskNotification::class);
+    }
+
+    public function updates(): HasMany
+    {
+        return $this->hasMany(TaskUpdate::class);
+    }
+
+    public function meeting(): BelongsTo
+    {
+        return $this->belongsTo(Meeting::class);
     }
 
     // ── Helpers ──
