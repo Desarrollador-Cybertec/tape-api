@@ -2,48 +2,121 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Database\Factories\UserFactory;
+use App\Enums\RoleEnum;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
     protected $fillable = [
         'name',
         'email',
         'password',
+        'role_id',
+        'active',
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'active' => 'boolean',
         ];
+    }
+
+    // ── Relationships ──
+
+    public function role(): BelongsTo
+    {
+        return $this->belongsTo(Role::class);
+    }
+
+    public function areas(): BelongsToMany
+    {
+        return $this->belongsToMany(Area::class, 'area_members')
+            ->withPivot(['assigned_by', 'claimed_by', 'joined_at', 'left_at', 'is_active'])
+            ->withTimestamps();
+    }
+
+    public function activeAreas(): BelongsToMany
+    {
+        return $this->areas()->wherePivot('is_active', true);
+    }
+
+    public function managedAreas(): HasMany
+    {
+        return $this->hasMany(Area::class, 'manager_user_id');
+    }
+
+    public function createdTasks(): HasMany
+    {
+        return $this->hasMany(Task::class, 'created_by');
+    }
+
+    public function assignedTasks(): HasMany
+    {
+        return $this->hasMany(Task::class, 'assigned_to_user_id');
+    }
+
+    public function responsibleTasks(): HasMany
+    {
+        return $this->hasMany(Task::class, 'current_responsible_user_id');
+    }
+
+    public function taskComments(): HasMany
+    {
+        return $this->hasMany(TaskComment::class);
+    }
+
+    public function uploadedAttachments(): HasMany
+    {
+        return $this->hasMany(TaskAttachment::class, 'uploaded_by');
+    }
+
+    // ── Helpers ──
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->role?->slug === RoleEnum::SUPERADMIN->value;
+    }
+
+    public function isAreaManager(): bool
+    {
+        return $this->role?->slug === RoleEnum::AREA_MANAGER->value;
+    }
+
+    public function isWorker(): bool
+    {
+        return $this->role?->slug === RoleEnum::WORKER->value;
+    }
+
+    public function hasRole(RoleEnum $role): bool
+    {
+        return $this->role?->slug === $role->value;
+    }
+
+    public function belongsToArea(int $areaId): bool
+    {
+        return $this->activeAreas()->where('areas.id', $areaId)->exists();
+    }
+
+    public function isManagerOfArea(int $areaId): bool
+    {
+        return Area::where('id', $areaId)
+            ->where('manager_user_id', $this->id)
+            ->exists();
     }
 }
