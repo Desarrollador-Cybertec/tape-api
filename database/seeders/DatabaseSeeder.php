@@ -87,5 +87,8 @@ class DatabaseSeeder extends Seeder
             'notes' => 'Primera reunión del equipo',
             'created_by' => $admin->id,
         ]);
+
+        // Seed system configuration and message templates
+        $this->call(SystemConfigSeeder::class);
     }
 }

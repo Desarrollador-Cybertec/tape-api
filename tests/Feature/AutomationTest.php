@@ -1,0 +1,216 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Enums\RoleEnum;
+use App\Enums\TaskStatusEnum;
+use App\Models\Role;
+use App\Models\SystemSetting;
+use App\Models\Task;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
+use Tests\TestCase;
+
+class AutomationTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private User $admin;
+    private User $worker;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $superadminRole = Role::create(['name' => 'Super Administrador', 'slug' => RoleEnum::SUPERADMIN->value]);
+        $workerRole = Role::create(['name' => 'Trabajador', 'slug' => RoleEnum::WORKER->value]);
+
+        $this->admin = User::factory()->create([
+            'role_id' => $superadminRole->id,
+            'password' => Hash::make('Password1'),
+        ]);
+
+        $this->worker = User::factory()->create([
+            'role_id' => $workerRole->id,
+            'password' => Hash::make('Password1'),
+        ]);
+
+        // Seed required settings
+        SystemSetting::create([
+            'key' => 'emails_enabled',
+            'value' => '1',
+            'type' => 'boolean',
+            'group' => 'notifications',
+        ]);
+
+        SystemSetting::create([
+            'key' => 'daily_summary_enabled',
+            'value' => '1',
+            'type' => 'boolean',
+            'group' => 'notifications',
+        ]);
+
+        SystemSetting::create([
+            'key' => 'detect_overdue_enabled',
+            'value' => '1',
+            'type' => 'boolean',
+            'group' => 'automation',
+        ]);
+
+        SystemSetting::create([
+            'key' => 'alert_days_before_due',
+            'value' => '3',
+            'type' => 'integer',
+            'group' => 'notifications',
+        ]);
+    }
+
+    // ── Trigger Overdue Detection ──
+
+    public function test_superadmin_can_trigger_overdue_detection(): void
+    {
+        Task::create([
+            'title' => 'Tarea vencida',
+            'created_by' => $this->admin->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'status' => TaskStatusEnum::IN_PROGRESS,
+            'due_date' => now()->subDays(3),
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->postJson('/api/automation/detect-overdue');
+
+        $response->assertOk()
+            ->assertJsonFragment(['message' => 'Detección de tareas vencidas ejecutada correctamente']);
+
+        $this->assertDatabaseHas('activity_logs', [
+            'user_id' => $this->admin->id,
+            'module' => 'automation',
+            'action' => 'trigger_overdue_detection',
+        ]);
+    }
+
+    public function test_worker_cannot_trigger_overdue_detection(): void
+    {
+        $response = $this->actingAs($this->worker)
+            ->postJson('/api/automation/detect-overdue');
+
+        $response->assertForbidden();
+    }
+
+    // ── Trigger Daily Summary ──
+
+    public function test_superadmin_can_trigger_daily_summary(): void
+    {
+        Task::create([
+            'title' => 'Pendiente',
+            'created_by' => $this->admin->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'status' => TaskStatusEnum::IN_PROGRESS,
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->postJson('/api/automation/send-summary');
+
+        $response->assertOk()
+            ->assertJsonFragment(['message' => 'Resumen diario enviado correctamente']);
+    }
+
+    public function test_trigger_summary_fails_when_disabled(): void
+    {
+        SystemSetting::setValue('daily_summary_enabled', false);
+
+        $response = $this->actingAs($this->admin)
+            ->postJson('/api/automation/send-summary');
+
+        $response->assertUnprocessable();
+    }
+
+    public function test_worker_cannot_trigger_daily_summary(): void
+    {
+        $response = $this->actingAs($this->worker)
+            ->postJson('/api/automation/send-summary');
+
+        $response->assertForbidden();
+    }
+
+    // ── Trigger Due Reminders ──
+
+    public function test_superadmin_can_trigger_due_reminders(): void
+    {
+        Task::create([
+            'title' => 'Vence pronto',
+            'created_by' => $this->admin->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'status' => TaskStatusEnum::IN_PROGRESS,
+            'due_date' => now()->addDay(),
+            'notify_on_due' => true,
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->postJson('/api/automation/send-reminders');
+
+        $response->assertOk()
+            ->assertJsonFragment(['message' => 'Recordatorios enviados correctamente']);
+    }
+
+    public function test_trigger_reminders_fails_when_emails_disabled(): void
+    {
+        SystemSetting::setValue('emails_enabled', false);
+
+        $response = $this->actingAs($this->admin)
+            ->postJson('/api/automation/send-reminders');
+
+        $response->assertUnprocessable();
+    }
+
+    public function test_worker_cannot_trigger_due_reminders(): void
+    {
+        $response = $this->actingAs($this->worker)
+            ->postJson('/api/automation/send-reminders');
+
+        $response->assertForbidden();
+    }
+
+    // ── Commands respect DB settings ──
+
+    public function test_detect_overdue_respects_enabled_setting(): void
+    {
+        SystemSetting::setValue('detect_overdue_enabled', false);
+
+        Task::create([
+            'title' => 'Tarea vencida',
+            'created_by' => $this->admin->id,
+            'status' => TaskStatusEnum::IN_PROGRESS,
+            'due_date' => now()->subDays(3),
+        ]);
+
+        $this->artisan('tasks:detect-overdue')
+            ->expectsOutput('Detección de tareas vencidas desactivada.')
+            ->assertSuccessful();
+
+        // Task should NOT be marked as overdue
+        $this->assertDatabaseMissing('task_status_history', [
+            'to_status' => TaskStatusEnum::OVERDUE->value,
+        ]);
+    }
+
+    public function test_daily_summary_respects_enabled_setting(): void
+    {
+        SystemSetting::setValue('daily_summary_enabled', false);
+
+        $this->artisan('tasks:send-daily-summary')
+            ->expectsOutput('Resumen diario desactivado.')
+            ->assertSuccessful();
+    }
+
+    public function test_due_reminders_respects_emails_enabled_setting(): void
+    {
+        SystemSetting::setValue('emails_enabled', false);
+
+        $this->artisan('tasks:send-due-reminders')
+            ->expectsOutput('Correos automáticos desactivados.')
+            ->assertSuccessful();
+    }
+}

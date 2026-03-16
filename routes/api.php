@@ -2,8 +2,11 @@
 
 use App\Http\Controllers\AreaController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\AutomationController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MeetingController;
+use App\Http\Controllers\MessageTemplateController;
+use App\Http\Controllers\SystemSettingController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -47,4 +50,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/general', [DashboardController::class, 'general']);
     Route::get('/dashboard/area/{area}', [DashboardController::class, 'byArea']);
     Route::get('/dashboard/me', [DashboardController::class, 'myDashboard']);
+
+    // ── Configuration (superadmin) ──
+    Route::get('/settings', [SystemSettingController::class, 'index']);
+    Route::put('/settings', [SystemSettingController::class, 'update']);
+
+    // Message Templates (superadmin)
+    Route::get('/message-templates', [MessageTemplateController::class, 'index']);
+    Route::get('/message-templates/{messageTemplate}', [MessageTemplateController::class, 'show']);
+    Route::put('/message-templates/{messageTemplate}', [MessageTemplateController::class, 'update']);
+
+    // Automation triggers (superadmin)
+    Route::post('/automation/detect-overdue', [AutomationController::class, 'triggerOverdueDetection']);
+    Route::post('/automation/send-summary', [AutomationController::class, 'triggerDailySummary']);
+    Route::post('/automation/send-reminders', [AutomationController::class, 'triggerDueReminders']);
 });

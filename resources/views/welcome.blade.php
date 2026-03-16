@@ -434,6 +434,12 @@
                 <a href="#commands">Comandos programados</a>
             </div>
             <div class="sidebar-section">
+                <div class="sidebar-section-title">Configuración</div>
+                <a href="#settings">Ajustes del sistema</a>
+                <a href="#message-templates">Plantillas de mensajes</a>
+                <a href="#automation">Automatización</a>
+            </div>
+            <div class="sidebar-section">
                 <div class="sidebar-section-title">Referencia</div>
                 <a href="#responses">Formato de respuestas</a>
                 <a href="#security">Seguridad</a>
@@ -455,7 +461,7 @@
                 seguimiento de avances, notificaciones automáticas consolidadas y dashboards analíticos.
             </p>
             <div class="hero-badges">
-                <span class="badge"><span class="badge-dot green"></span> 80 tests passing</span>
+                <span class="badge"><span class="badge-dot green"></span> 110 tests passing</span>
                 <span class="badge"><span class="badge-dot blue"></span> Laravel 12</span>
                 <span class="badge"><span class="badge-dot purple"></span> Sanctum Auth</span>
                 <span class="badge"><span class="badge-dot yellow"></span> PostgreSQL / Supabase</span>
@@ -1256,7 +1262,7 @@ attachment_type: evidence | support | final_delivery</code></pre>
             <div class="grid-3">
                 <div class="card">
                     <div class="card-title">notify_on_due</div>
-                    <p>Alerta cuando la fecha de entrega está a 3 días o menos</p>
+                    <p>Alerta cuando la fecha de entrega está próxima (días configurables vía <code>alert_days_before_due</code>)</p>
                 </div>
                 <div class="card">
                     <div class="card-title">notify_on_overdue</div>
@@ -1267,34 +1273,151 @@ attachment_type: evidence | support | final_delivery</code></pre>
                     <p>Notificación automática al completar la tarea</p>
                 </div>
             </div>
-            <p>Los comandos programados generan registros en la tabla <code>task_notifications</code>, que luego pueden ser consumidos por un servicio de email o push notifications.</p>
+            <p>Los comandos programados generan registros en la tabla <code>task_notifications</code>. Toda la configuración de notificaciones es gestionable desde la API (ver <a href="#settings" style="color:var(--accent)">Ajustes del sistema</a>).</p>
         </div>
 
         {{-- ═══════════════ COMMANDS ═══════════════ --}}
         <div class="section" id="commands">
             <h2>Comandos Programados</h2>
+            <p>Los comandos se ejecutan automáticamente según el scheduler, pero sus horarios y estado (activado/desactivado) son <strong>configurables desde la API</strong>. También pueden ejecutarse manualmente desde los <a href="#automation" style="color:var(--accent)">endpoints de automatización</a>.</p>
             <div class="table-wrap">
                 <table>
-                    <thead><tr><th>Comando</th><th>Descripción</th><th>Horario</th></tr></thead>
+                    <thead><tr><th>Comando</th><th>Descripción</th><th>Configuración</th></tr></thead>
                     <tbody>
                         <tr>
                             <td><code>tasks:detect-overdue</code></td>
                             <td>Marca como vencidas las tareas pasadas de fecha. Cambia el estado a <code>overdue</code> y registra en <code>task_status_history</code> y <code>activity_logs</code>.</td>
-                            <td>06:00 diario</td>
+                            <td><code>detect_overdue_enabled</code>, <code>detect_overdue_time</code> (default: 06:00)</td>
                         </tr>
                         <tr>
                             <td><code>tasks:send-daily-summary</code></td>
-                            <td>Genera resúmenes consolidados por responsable. Agrupa tareas activas, cuenta vencidas y próximas a vencer, y crea un <code>TaskNotification</code> por usuario.</td>
-                            <td>07:00 diario</td>
+                            <td>Genera resúmenes consolidados por responsable. Usa <code>alert_days_before_due</code> para determinar tareas próximas a vencer.</td>
+                            <td><code>daily_summary_enabled</code>, <code>daily_summary_time</code> (default: 07:00)</td>
                         </tr>
                         <tr>
                             <td><code>tasks:send-due-reminders</code></td>
-                            <td>Envía recordatorios individuales para tareas con <code>notify_on_due</code> próximas a vencer (3 días) y alertas para tareas con <code>notify_on_overdue</code> ya vencidas.</td>
-                            <td>08:00 diario</td>
+                            <td>Envía recordatorios individuales para tareas con <code>notify_on_due</code> y alertas para tareas con <code>notify_on_overdue</code>. Usa <code>alert_days_before_due</code> configurable.</td>
+                            <td><code>emails_enabled</code>, <code>send_reminders_time</code> (default: 08:00)</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
+        </div>
+
+        {{-- ═══════════════ SETTINGS ═══════════════ --}}
+        <div class="section" id="settings">
+            <h2>Ajustes del Sistema</h2>
+            <p>Tabla <code>system_settings</code> — Configuración clave-valor administrable vía API. Solo accesible por <strong>superadmin</strong>.</p>
+
+            <h4><span class="method method-get">GET</span> /api/settings</h4>
+            <p>Lista todos los ajustes agrupados. Filtrar con <code>?group=notifications</code> o <code>?group=automation</code>.</p>
+            <pre><code>// Respuesta
+{
+    "data": {
+        "notifications": [
+            { "key": "emails_enabled", "value": true, "type": "boolean", "group": "notifications", "description": "..." },
+            { "key": "alert_days_before_due", "value": 3, "type": "integer", "group": "notifications", "description": "..." }
+        ],
+        "automation": [
+            { "key": "detect_overdue_time", "value": "06:00", "type": "string", "group": "automation", "description": "..." }
+        ]
+    }
+}</code></pre>
+
+            <h4><span class="method method-put">PUT</span> /api/settings</h4>
+            <p>Actualización masiva de ajustes.</p>
+            <pre><code>// Request body
+{
+    "settings": [
+        { "key": "emails_enabled", "value": "0" },
+        { "key": "alert_days_before_due", "value": "5" },
+        { "key": "daily_summary_time", "value": "09:00" }
+    ]
+}</code></pre>
+
+            <h4>Ajustes disponibles</h4>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Clave</th><th>Tipo</th><th>Grupo</th><th>Default</th><th>Descripción</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>emails_enabled</code></td><td>boolean</td><td>notifications</td><td>true</td><td>Activar/desactivar correos automáticos</td></tr>
+                        <tr><td><code>daily_summary_enabled</code></td><td>boolean</td><td>notifications</td><td>true</td><td>Activar resumen diario</td></tr>
+                        <tr><td><code>alert_days_before_due</code></td><td>integer</td><td>notifications</td><td>3</td><td>Días antes del vencimiento para alertas</td></tr>
+                        <tr><td><code>alert_on_due_date</code></td><td>boolean</td><td>notifications</td><td>true</td><td>Alerta el día de vencimiento</td></tr>
+                        <tr><td><code>alert_overdue</code></td><td>boolean</td><td>notifications</td><td>true</td><td>Alerta cuando tarea está vencida</td></tr>
+                        <tr><td><code>copy_to_manager</code></td><td>boolean</td><td>notifications</td><td>true</td><td>Copia notificaciones al encargado</td></tr>
+                        <tr><td><code>copy_to_superadmin</code></td><td>boolean</td><td>notifications</td><td>false</td><td>Copia notificaciones al superadmin</td></tr>
+                        <tr><td><code>detect_overdue_enabled</code></td><td>boolean</td><td>automation</td><td>true</td><td>Activar detección automática</td></tr>
+                        <tr><td><code>detect_overdue_time</code></td><td>string</td><td>automation</td><td>06:00</td><td>Hora de detección de vencidas</td></tr>
+                        <tr><td><code>daily_summary_time</code></td><td>string</td><td>automation</td><td>07:00</td><td>Hora del resumen diario</td></tr>
+                        <tr><td><code>send_reminders_enabled</code></td><td>boolean</td><td>automation</td><td>true</td><td>Activar recordatorios automáticos</td></tr>
+                        <tr><td><code>send_reminders_time</code></td><td>string</td><td>automation</td><td>08:00</td><td>Hora de recordatorios</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {{-- ═══════════════ MESSAGE TEMPLATES ═══════════════ --}}
+        <div class="section" id="message-templates">
+            <h2>Plantillas de Mensajes</h2>
+            <p>Tabla <code>message_templates</code> — Plantillas editables para notificaciones. Solo accesible por <strong>superadmin</strong>. Las plantillas son precargadas (seeder), no se crean ni eliminan desde la API.</p>
+
+            <h4><span class="method method-get">GET</span> /api/message-templates</h4>
+            <p>Lista todas las plantillas.</p>
+
+            <h4><span class="method method-get">GET</span> /api/message-templates/{id}</h4>
+            <p>Detalle de una plantilla.</p>
+
+            <h4><span class="method method-put">PUT</span> /api/message-templates/{id}</h4>
+            <p>Editar asunto, cuerpo o estado activo.</p>
+            <pre><code>// Request body (todos los campos son opcionales)
+{
+    "subject": "Nuevo asunto: {task_title}",
+    "body": "Hola {user_name}, nueva tarea asignada...",
+    "active": false
+}</code></pre>
+
+            <h4>Plantillas disponibles</h4>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Slug</th><th>Nombre</th><th>Variables</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>new_assignment</code></td><td>Nueva asignación</td><td>{task_title}, {user_name}, {priority}, {due_date}</td></tr>
+                        <tr><td><code>task_reminder</code></td><td>Recordatorio</td><td>{task_title}, {user_name}, {days_remaining}, {due_date}</td></tr>
+                        <tr><td><code>task_overdue</code></td><td>Tarea vencida</td><td>{task_title}, {user_name}, {days_overdue}, {due_date}</td></tr>
+                        <tr><td><code>task_delegated</code></td><td>Tarea delegada</td><td>{task_title}, {user_name}, {delegated_by}, {priority}, {due_date}</td></tr>
+                        <tr><td><code>task_approved</code></td><td>Tarea aprobada</td><td>{task_title}, {user_name}</td></tr>
+                        <tr><td><code>task_rejected</code></td><td>Tarea rechazada</td><td>{task_title}, {user_name}, {rejection_reason}</td></tr>
+                        <tr><td><code>daily_summary</code></td><td>Resumen diario</td><td>{user_name}, {date}, {summary_content}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {{-- ═══════════════ AUTOMATION ═══════════════ --}}
+        <div class="section" id="automation">
+            <h2>Automatización (Triggers Manuales)</h2>
+            <p>Endpoints para ejecutar manualmente las tareas automatizadas. Solo accesible por <strong>superadmin</strong>. Cada ejecución se registra en <code>activity_logs</code>.</p>
+
+            <h4><span class="method method-post">POST</span> /api/automation/detect-overdue</h4>
+            <p>Ejecuta la detección de tareas vencidas. Equivalente a <code>tasks:detect-overdue</code>.</p>
+
+            <h4><span class="method method-post">POST</span> /api/automation/send-summary</h4>
+            <p>Envía el resumen diario de tareas. Falla con <code>422</code> si <code>daily_summary_enabled</code> está desactivado.</p>
+
+            <h4><span class="method method-post">POST</span> /api/automation/send-reminders</h4>
+            <p>Envía recordatorios de vencimiento. Falla con <code>422</code> si <code>emails_enabled</code> está desactivado.</p>
+
+            <pre><code>// Respuesta exitosa (200)
+{
+    "message": "Detección de tareas vencidas ejecutada correctamente",
+    "output": "Se marcaron 3 tareas como vencidas."
+}
+
+// Respuesta cuando está desactivado (422)
+{
+    "message": "El resumen diario está desactivado. Actívelo en configuración antes de enviarlo."
+}</code></pre>
         </div>
 
         {{-- ═══════════════ RESPONSES ═══════════════ --}}
@@ -1391,6 +1514,8 @@ attachment_type: evidence | support | final_delivery</code></pre>
                         <tr><td>12</td><td><code>meetings</code></td><td>Reuniones / origen de compromisos</td></tr>
                         <tr><td>13</td><td><code>tasks</code> (mod)</td><td>Agrega <code>meeting_id</code>, flags de notificación, <code>progress_percent</code></td></tr>
                         <tr><td>14</td><td><code>task_updates</code></td><td>Reportes de avance/seguimiento</td></tr>
+                        <tr><td>15</td><td><code>system_settings</code></td><td>Configuración clave-valor del sistema</td></tr>
+                        <tr><td>16</td><td><code>message_templates</code></td><td>Plantillas de mensajes editables</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1399,7 +1524,7 @@ attachment_type: evidence | support | final_delivery</code></pre>
         {{-- ═══════════════ TESTS ═══════════════ --}}
         <div class="section" id="tests">
             <h2>Tests</h2>
-            <p>80 tests organizados por feature, 187 assertions — todos pasando con SQLite in-memory.</p>
+            <p>110 tests organizados por feature, 244 assertions — todos pasando con SQLite in-memory.</p>
 
             <div class="table-wrap">
                 <table>
@@ -1412,7 +1537,10 @@ attachment_type: evidence | support | final_delivery</code></pre>
                         <tr><td><code>TaskTest</code></td><td>15</td><td>CRUD, delegación, flujo completo de estados, adjuntos, comentarios</td></tr>
                         <tr><td><code>TaskUpdateTest</code></td><td>6</td><td>Avances, validaciones, permisos, sincronización de progreso</td></tr>
                         <tr><td><code>DashboardTest</code></td><td>7</td><td>Dashboard general, por área, personal, permisos, métricas</td></tr>
-                        <tr><td><code>ScheduledCommandsTest</code></td><td>5</td><td>Detección overdue, resumen diario, recordatorios, flags</td></tr>
+                        <tr><td><code>ScheduledCommandsTest</code></td><td>6</td><td>Detección overdue, resumen diario, recordatorios, flags</td></tr>
+                        <tr><td><code>SystemSettingTest</code></td><td>10</td><td>CRUD, agrupación, filtrado, casteo de tipos, permisos</td></tr>
+                        <tr><td><code>MessageTemplateTest</code></td><td>9</td><td>CRUD, activar/desactivar, validaciones, permisos</td></tr>
+                        <tr><td><code>AutomationTest</code></td><td>11</td><td>Triggers manuales, permisos, configuración enabled/disabled</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1424,7 +1552,7 @@ php vendor/bin/phpunit --testdox</code></pre>
 
         {{-- Footer --}}
         <div style="border-top:1px solid var(--border); padding-top:24px; margin-top:48px; text-align:center; color:var(--text-muted); font-size:13px;">
-            TAPE API v1.0 &middot; Laravel {{ app()->version() }} &middot; PHP {{ PHP_VERSION }}
+            TAPE API v1.1 &middot; Laravel {{ app()->version() }} &middot; PHP {{ PHP_VERSION }}
         </div>
 
     </main>
