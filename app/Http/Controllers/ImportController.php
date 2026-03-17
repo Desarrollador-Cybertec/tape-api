@@ -57,6 +57,11 @@ class ImportController extends Controller
         $errors = [];
         $row = 1;
 
+        // Pre-fetch lookup caches to avoid per-row queries
+        $areaCache = Area::all()->keyBy(fn ($a) => strtolower($a->name));
+        $areaByProcess = Area::whereNotNull('process_identifier')->get()->keyBy(fn ($a) => strtolower($a->process_identifier));
+        $userCache = User::pluck('id', 'email');
+
         DB::beginTransaction();
 
         try {
@@ -69,7 +74,7 @@ class ImportController extends Controller
                 }
 
                 $rowData = array_combine($header, $data);
-                $result = $this->processRow($rowData, $request->user(), $row);
+                $result = $this->processRow($rowData, $request->user(), $row, $areaCache, $areaByProcess, $userCache);
 
                 if ($result['success']) {
                     $imported++;
@@ -104,40 +109,37 @@ class ImportController extends Controller
         }
     }
 
-    private function processRow(array $row, User $creator, int $rowNumber): array
+    private function processRow(array $row, User $creator, int $rowNumber, &$areaCache, &$areaByProcess, $userCache): array
     {
         $title = trim($row['titulo'] ?? '');
         if (empty($title)) {
             return ['success' => false, 'error' => "Fila {$rowNumber}: título vacío."];
         }
 
-        // Resolve area by name or process_identifier
+        // Resolve area from cache instead of per-row query
         $areaId = null;
         $areaValue = trim($row['area'] ?? '');
         if (!empty($areaValue)) {
-            $area = Area::where('name', $areaValue)
-                ->orWhere('process_identifier', $areaValue)
-                ->first();
+            $key = strtolower($areaValue);
+            $area = $areaCache->get($key) ?? $areaByProcess->get($key);
 
             if (!$area) {
-                // Auto-create area with process_identifier
                 $area = Area::create([
                     'name' => $areaValue,
                     'process_identifier' => $areaValue,
                     'active' => true,
                 ]);
+                $areaCache->put($key, $area);
+                $areaByProcess->put($key, $area);
             }
             $areaId = $area->id;
         }
 
-        // Resolve responsible user by email
+        // Resolve responsible user from cache instead of per-row query
         $responsibleId = null;
         $email = trim($row['responsable_email'] ?? '');
         if (!empty($email)) {
-            $user = User::where('email', $email)->first();
-            if ($user) {
-                $responsibleId = $user->id;
-            }
+            $responsibleId = $userCache->get($email);
         }
 
         // Map priority

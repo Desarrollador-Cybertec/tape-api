@@ -5,9 +5,9 @@ namespace App\Http\Controllers;
 use App\Enums\TaskStatusEnum;
 use App\Models\Area;
 use App\Models\Task;
-use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
@@ -18,86 +18,78 @@ class DashboardController extends Controller
             abort(403);
         }
 
+        $completed = TaskStatusEnum::COMPLETED->value;
+        $cancelled = TaskStatusEnum::CANCELLED->value;
+
+        // Single query for all aggregate counts (replaces 6 separate COUNT queries)
+        $stats = Task::toBase()->selectRaw("
+            COUNT(*) as total_all,
+            SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as total_completed,
+            SUM(CASE WHEN status NOT IN (?, ?) THEN 1 ELSE 0 END) as total_active,
+            SUM(CASE WHEN due_date < CURRENT_DATE AND status NOT IN (?, ?) THEN 1 ELSE 0 END) as overdue_tasks,
+            SUM(CASE WHEN due_date >= CURRENT_DATE AND due_date <= ? AND status NOT IN (?, ?) THEN 1 ELSE 0 END) as due_soon,
+            SUM(CASE WHEN status = ? AND completed_at >= ? THEN 1 ELSE 0 END) as completed_this_month
+        ", [
+            $completed,
+            $completed, $cancelled,
+            $completed, $cancelled,
+            now()->addDays(3)->toDateString(), $completed, $cancelled,
+            $completed, now()->startOfMonth(),
+        ])->first();
+
         $tasksByStatus = Task::select('status', DB::raw('count(*) as total'))
             ->groupBy('status')
             ->pluck('total', 'status');
 
-        $tasksByArea = Task::select('area_id', DB::raw('count(*) as total'))
-            ->whereNotNull('area_id')
-            ->groupBy('area_id')
+        // JOIN to resolve area names in one query (eliminates N+1)
+        $tasksByArea = Task::select('tasks.area_id', 'areas.name as area_name', DB::raw('count(*) as total'))
+            ->join('areas', 'tasks.area_id', '=', 'areas.id')
+            ->whereNotNull('tasks.area_id')
+            ->groupBy('tasks.area_id', 'areas.name')
             ->get()
-            ->map(function ($item) {
-                $area = Area::find($item->area_id);
-                return [
-                    'area_id' => $item->area_id,
-                    'area_name' => $area?->name,
-                    'total' => $item->total,
-                ];
-            });
+            ->map(fn ($item) => [
+                'area_id' => $item->area_id,
+                'area_name' => $item->area_name,
+                'total' => $item->total,
+            ]);
 
-        $overdueTasks = Task::where('due_date', '<', now())
-            ->whereNotIn('status', [
-                TaskStatusEnum::COMPLETED->value,
-                TaskStatusEnum::CANCELLED->value,
-            ])
-            ->count();
-
-        $completedThisMonth = Task::where('status', TaskStatusEnum::COMPLETED->value)
-            ->where('completed_at', '>=', now()->startOfMonth())
-            ->count();
-
-        $totalActive = Task::whereNotIn('status', [
-            TaskStatusEnum::COMPLETED->value,
-            TaskStatusEnum::CANCELLED->value,
-        ])->count();
-
-        $totalCompleted = Task::where('status', TaskStatusEnum::COMPLETED->value)->count();
-        $totalAll = Task::count();
+        $totalAll = (int) $stats->total_all;
+        $totalCompleted = (int) $stats->total_completed;
         $completionRate = $totalAll > 0 ? round(($totalCompleted / $totalAll) * 100, 1) : 0;
 
-        $avgCloseDays = Task::where('status', TaskStatusEnum::COMPLETED->value)
+        $completedTasks = Task::where('status', $completed)
             ->whereNotNull('completed_at')
-            ->selectRaw('AVG(JULIANDAY(completed_at) - JULIANDAY(created_at)) as avg_days')
-            ->value('avg_days');
+            ->get(['created_at', 'completed_at']);
 
-        $topResponsibles = Task::select('current_responsible_user_id', DB::raw('count(*) as total'))
-            ->whereNotNull('current_responsible_user_id')
-            ->whereNotIn('status', [
-                TaskStatusEnum::COMPLETED->value,
-                TaskStatusEnum::CANCELLED->value,
-            ])
-            ->groupBy('current_responsible_user_id')
+        $avgCloseDays = $completedTasks->isNotEmpty()
+            ? round($completedTasks->avg(fn ($t) => $t->created_at->diffInDays($t->completed_at)), 1)
+            : null;
+
+        // JOIN to resolve user names in one query (eliminates N+1)
+        $topResponsibles = Task::select('tasks.current_responsible_user_id', 'users.name as user_name', DB::raw('count(*) as total'))
+            ->join('users', 'tasks.current_responsible_user_id', '=', 'users.id')
+            ->whereNotIn('tasks.status', [$completed, $cancelled])
+            ->groupBy('tasks.current_responsible_user_id', 'users.name')
             ->orderByDesc('total')
             ->limit(10)
             ->get()
-            ->map(function ($item) {
-                $user = User::find($item->current_responsible_user_id);
-                return [
-                    'user_id' => $item->current_responsible_user_id,
-                    'user_name' => $user?->name,
-                    'active_tasks' => $item->total,
-                ];
-            });
-
-        $dueSoon = Task::where('due_date', '>=', now())
-            ->where('due_date', '<=', now()->addDays(3))
-            ->whereNotIn('status', [
-                TaskStatusEnum::COMPLETED->value,
-                TaskStatusEnum::CANCELLED->value,
-            ])
-            ->count();
+            ->map(fn ($item) => [
+                'user_id' => $item->current_responsible_user_id,
+                'user_name' => $item->user_name,
+                'active_tasks' => $item->total,
+            ]);
 
         return response()->json([
             'tasks_by_status' => $tasksByStatus,
             'tasks_by_area' => $tasksByArea,
-            'overdue_tasks' => $overdueTasks,
-            'due_soon' => $dueSoon,
-            'completed_this_month' => $completedThisMonth,
-            'total_active' => $totalActive,
+            'overdue_tasks' => (int) $stats->overdue_tasks,
+            'due_soon' => (int) $stats->due_soon,
+            'completed_this_month' => (int) $stats->completed_this_month,
+            'total_active' => (int) $stats->total_active,
             'total_completed' => $totalCompleted,
             'total_all' => $totalAll,
             'completion_rate' => $completionRate,
-            'avg_close_days' => $avgCloseDays ? round($avgCloseDays, 1) : null,
+            'avg_close_days' => $avgCloseDays,
             'top_responsibles' => $topResponsibles,
         ]);
     }
@@ -110,49 +102,50 @@ class DashboardController extends Controller
             abort(403);
         }
 
-        $tasks = Task::where('area_id', $area->id);
+        $completed = TaskStatusEnum::COMPLETED->value;
+        $cancelled = TaskStatusEnum::CANCELLED->value;
 
-        $byStatus = (clone $tasks)
+        // Single query for total + completed + overdue (replaces 3 separate queries)
+        $stats = Task::where('area_id', $area->id)->toBase()->selectRaw("
+            COUNT(*) as total,
+            SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed,
+            SUM(CASE WHEN due_date < CURRENT_DATE AND status NOT IN (?, ?) THEN 1 ELSE 0 END) as overdue
+        ", [$completed, $completed, $cancelled])->first();
+
+        $byStatus = Task::where('area_id', $area->id)
             ->select('status', DB::raw('count(*) as total'))
             ->groupBy('status')
             ->pluck('total', 'status');
 
-        $overdue = (clone $tasks)
-            ->where('due_date', '<', now())
-            ->whereNotIn('status', [TaskStatusEnum::COMPLETED->value, TaskStatusEnum::CANCELLED->value])
-            ->count();
-
-        $byResponsible = (clone $tasks)
-            ->select('current_responsible_user_id', DB::raw('count(*) as total'))
-            ->whereNotNull('current_responsible_user_id')
-            ->whereNotIn('status', [TaskStatusEnum::COMPLETED->value, TaskStatusEnum::CANCELLED->value])
-            ->groupBy('current_responsible_user_id')
+        // JOIN to resolve user names in one query (eliminates N+1)
+        $byResponsible = Task::select('tasks.current_responsible_user_id', 'users.name as user_name', DB::raw('count(*) as total'))
+            ->join('users', 'tasks.current_responsible_user_id', '=', 'users.id')
+            ->where('tasks.area_id', $area->id)
+            ->whereNotIn('tasks.status', [$completed, $cancelled])
+            ->groupBy('tasks.current_responsible_user_id', 'users.name')
             ->get()
-            ->map(function ($item) {
-                $user = User::find($item->current_responsible_user_id);
-                return [
-                    'user_id' => $item->current_responsible_user_id,
-                    'user_name' => $user?->name,
-                    'active_tasks' => $item->total,
-                ];
-            });
+            ->map(fn ($item) => [
+                'user_id' => $item->current_responsible_user_id,
+                'user_name' => $item->user_name,
+                'active_tasks' => $item->total,
+            ]);
 
-        $totalArea = (clone $tasks)->count();
-        $completedArea = (clone $tasks)->where('status', TaskStatusEnum::COMPLETED->value)->count();
-        $completionRate = $totalArea > 0 ? round(($completedArea / $totalArea) * 100, 1) : 0;
+        $total = (int) $stats->total;
+        $completedCount = (int) $stats->completed;
+        $completionRate = $total > 0 ? round(($completedCount / $total) * 100, 1) : 0;
 
-        $withoutProgress = (clone $tasks)
-            ->whereNotIn('status', [TaskStatusEnum::COMPLETED->value, TaskStatusEnum::CANCELLED->value])
+        $withoutProgress = Task::where('area_id', $area->id)
+            ->whereNotIn('status', [$completed, $cancelled])
             ->whereDoesntHave('updates')
             ->count();
 
         return response()->json([
             'area' => ['id' => $area->id, 'name' => $area->name],
             'tasks_by_status' => $byStatus,
-            'overdue_tasks' => $overdue,
+            'overdue_tasks' => (int) $stats->overdue,
             'by_responsible' => $byResponsible,
-            'total_tasks' => $totalArea,
-            'completed_tasks' => $completedArea,
+            'total_tasks' => $total,
+            'completed_tasks' => $completedCount,
             'completion_rate' => $completionRate,
             'without_progress' => $withoutProgress,
         ]);
@@ -162,36 +155,32 @@ class DashboardController extends Controller
     {
         $user = $request->user();
 
-        $myTasks = Task::where('current_responsible_user_id', $user->id);
+        $completed = TaskStatusEnum::COMPLETED->value;
+        $cancelled = TaskStatusEnum::CANCELLED->value;
 
-        $active = (clone $myTasks)
-            ->whereNotIn('status', [TaskStatusEnum::COMPLETED->value, TaskStatusEnum::CANCELLED->value])
-            ->count();
+        // Single query for all counts (replaces 4 separate COUNT queries)
+        $stats = Task::where('current_responsible_user_id', $user->id)->toBase()->selectRaw("
+            SUM(CASE WHEN status NOT IN (?, ?) THEN 1 ELSE 0 END) as active,
+            SUM(CASE WHEN due_date < CURRENT_DATE AND status NOT IN (?, ?) THEN 1 ELSE 0 END) as overdue,
+            SUM(CASE WHEN due_date >= CURRENT_DATE AND due_date <= ? AND status NOT IN (?, ?) THEN 1 ELSE 0 END) as due_soon,
+            SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed
+        ", [
+            $completed, $cancelled,
+            $completed, $cancelled,
+            now()->addDays(3)->toDateString(), $completed, $cancelled,
+            $completed,
+        ])->first();
 
-        $overdue = (clone $myTasks)
-            ->where('due_date', '<', now())
-            ->whereNotIn('status', [TaskStatusEnum::COMPLETED->value, TaskStatusEnum::CANCELLED->value])
-            ->count();
-
-        $dueSoon = (clone $myTasks)
-            ->where('due_date', '>=', now())
-            ->where('due_date', '<=', now()->addDays(3))
-            ->whereNotIn('status', [TaskStatusEnum::COMPLETED->value, TaskStatusEnum::CANCELLED->value])
-            ->count();
-
-        $completed = (clone $myTasks)
-            ->where('status', TaskStatusEnum::COMPLETED->value)
-            ->count();
-
-        $byStatus = (clone $myTasks)
+        $byStatus = Task::where('current_responsible_user_id', $user->id)
             ->select('status', DB::raw('count(*) as total'))
             ->groupBy('status')
             ->pluck('total', 'status');
 
         $recentTasks = Task::where('current_responsible_user_id', $user->id)
-            ->whereNotIn('status', [TaskStatusEnum::COMPLETED->value, TaskStatusEnum::CANCELLED->value])
+            ->whereNotIn('status', [$completed, $cancelled])
             ->orderBy('due_date')
             ->limit(10)
+            ->select(['id', 'title', 'status', 'priority', 'due_date', 'progress_percent'])
             ->get()
             ->map(fn (Task $task) => [
                 'id' => $task->id,
@@ -204,10 +193,10 @@ class DashboardController extends Controller
             ]);
 
         return response()->json([
-            'active_tasks' => $active,
-            'overdue_tasks' => $overdue,
-            'due_soon' => $dueSoon,
-            'completed_tasks' => $completed,
+            'active_tasks' => (int) ($stats->active ?? 0),
+            'overdue_tasks' => (int) ($stats->overdue ?? 0),
+            'due_soon' => (int) ($stats->due_soon ?? 0),
+            'completed_tasks' => (int) ($stats->completed ?? 0),
             'tasks_by_status' => $byStatus,
             'upcoming_tasks' => $recentTasks,
         ]);
@@ -222,11 +211,40 @@ class DashboardController extends Controller
             abort(403);
         }
 
-        $areas = Area::with('manager')->where('active', true)->get();
+        $completed = TaskStatusEnum::COMPLETED->value;
+        $cancelled = TaskStatusEnum::CANCELLED->value;
 
-        $consolidated = $areas->map(function (Area $area) {
-            $tasks = Task::where('area_id', $area->id);
-            $total = (clone $tasks)->count();
+        $areas = Area::with('manager')->where('active', true)->get();
+        $areaIds = $areas->pluck('id');
+
+        // Fetch ALL tasks for active areas in ONE query (only needed columns)
+        $allTasks = Task::whereIn('area_id', $areaIds)
+            ->select(['id', 'area_id', 'status', 'due_date', 'created_at'])
+            ->get();
+
+        $activeTaskIds = $allTasks
+            ->filter(fn ($t) => !in_array($t->status, [$completed, $cancelled]))
+            ->pluck('id');
+
+        // Get latest update date per active task in ONE query (eliminates N×M N+1)
+        $latestUpdates = [];
+        $taskIdsWithUpdates = [];
+        if ($activeTaskIds->isNotEmpty()) {
+            $latestUpdates = DB::table('task_updates')
+                ->select('task_id', DB::raw('MAX(created_at) as last_update_at'))
+                ->whereIn('task_id', $activeTaskIds)
+                ->groupBy('task_id')
+                ->pluck('last_update_at', 'task_id')
+                ->toArray();
+            $taskIdsWithUpdates = array_keys($latestUpdates);
+        }
+
+        // Group tasks by area in PHP (no per-area queries)
+        $tasksByArea = $allTasks->groupBy('area_id');
+
+        $consolidated = $areas->map(function (Area $area) use ($tasksByArea, $latestUpdates, $taskIdsWithUpdates, $completed, $cancelled) {
+            $areaTasks = $tasksByArea->get($area->id, collect());
+            $total = $areaTasks->count();
 
             if ($total === 0) {
                 return [
@@ -244,39 +262,26 @@ class DashboardController extends Controller
                 ];
             }
 
-            $byStatus = (clone $tasks)
-                ->select('status', DB::raw('count(*) as total'))
-                ->groupBy('status')
-                ->pluck('total', 'status');
+            $byStatus = $areaTasks->groupBy('status')->map->count();
+            $completedCount = $byStatus->get($completed, 0);
+            $completionRate = round(($completedCount / $total) * 100, 1);
 
-            $completed = $byStatus->get(TaskStatusEnum::COMPLETED->value, 0);
-            $completionRate = round(($completed / $total) * 100, 1);
+            $activeTasks = $areaTasks->filter(fn ($t) => !in_array($t->status, [$completed, $cancelled]));
 
-            $overdue = (clone $tasks)
-                ->where('due_date', '<', now())
-                ->whereNotIn('status', [TaskStatusEnum::COMPLETED->value, TaskStatusEnum::CANCELLED->value])
-                ->count();
-
-            $withoutProgress = (clone $tasks)
-                ->whereNotIn('status', [TaskStatusEnum::COMPLETED->value, TaskStatusEnum::CANCELLED->value])
-                ->whereDoesntHave('updates')
-                ->count();
-
-            $activeTasks = (clone $tasks)
-                ->whereNotIn('status', [TaskStatusEnum::COMPLETED->value, TaskStatusEnum::CANCELLED->value])
-                ->get();
+            $overdue = $activeTasks->filter(fn ($t) => $t->due_date && $t->due_date < now())->count();
+            $withoutProgress = $activeTasks->filter(fn ($t) => !in_array($t->id, $taskIdsWithUpdates))->count();
 
             $oldestPending = $activeTasks->min('created_at');
             $oldestPendingDays = $oldestPending ? (int) $oldestPending->diffInDays(now()) : null;
 
-            // Average days without update for active tasks
             $avgDays = null;
             if ($activeTasks->isNotEmpty()) {
-                $totalDays = $activeTasks->sum(function ($task) {
-                    $lastUpdate = $task->updates()->latest()->first();
-                    return $lastUpdate
-                        ? (int) $lastUpdate->created_at->diffInDays(now())
-                        : (int) $task->created_at->diffInDays(now());
+                $totalDays = $activeTasks->sum(function ($task) use ($latestUpdates) {
+                    $lastUpdateAt = $latestUpdates[$task->id] ?? null;
+                    if ($lastUpdateAt) {
+                        return (int) Carbon::parse($lastUpdateAt)->diffInDays(now());
+                    }
+                    return (int) $task->created_at->diffInDays(now());
                 });
                 $avgDays = round($totalDays / $activeTasks->count(), 1);
             }
@@ -296,21 +301,23 @@ class DashboardController extends Controller
             ];
         });
 
-        // Global summary
-        $totalTasks = Task::count();
-        $totalCompleted = Task::where('status', TaskStatusEnum::COMPLETED->value)->count();
-        $totalActive = Task::whereNotIn('status', [TaskStatusEnum::COMPLETED->value, TaskStatusEnum::CANCELLED->value])->count();
-        $totalOverdue = Task::where('due_date', '<', now())
-            ->whereNotIn('status', [TaskStatusEnum::COMPLETED->value, TaskStatusEnum::CANCELLED->value])
-            ->count();
+        // Global summary — single query with conditional aggregation (replaces 4 queries)
+        $summary = Task::toBase()->selectRaw("
+            COUNT(*) as total_tasks,
+            SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as total_completed,
+            SUM(CASE WHEN status NOT IN (?, ?) THEN 1 ELSE 0 END) as total_active,
+            SUM(CASE WHEN due_date < CURRENT_DATE AND status NOT IN (?, ?) THEN 1 ELSE 0 END) as total_overdue
+        ", [$completed, $completed, $cancelled, $completed, $cancelled])->first();
 
         return response()->json([
             'summary' => [
-                'total_tasks' => $totalTasks,
-                'total_completed' => $totalCompleted,
-                'total_active' => $totalActive,
-                'total_overdue' => $totalOverdue,
-                'global_completion_rate' => $totalTasks > 0 ? round(($totalCompleted / $totalTasks) * 100, 1) : 0,
+                'total_tasks' => (int) $summary->total_tasks,
+                'total_completed' => (int) $summary->total_completed,
+                'total_active' => (int) $summary->total_active,
+                'total_overdue' => (int) $summary->total_overdue,
+                'global_completion_rate' => $summary->total_tasks > 0
+                    ? round(($summary->total_completed / $summary->total_tasks) * 100, 1)
+                    : 0,
             ],
             'by_area' => $consolidated,
         ]);
