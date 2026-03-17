@@ -212,4 +212,107 @@ class DashboardController extends Controller
             'upcoming_tasks' => $recentTasks,
         ]);
     }
+
+    /**
+     * Consolidated report by area/process — mirrors the legacy Excel view.
+     */
+    public function consolidated(Request $request): JsonResponse
+    {
+        if (!$request->user()->isSuperAdmin()) {
+            abort(403);
+        }
+
+        $areas = Area::with('manager')->where('active', true)->get();
+
+        $consolidated = $areas->map(function (Area $area) {
+            $tasks = Task::where('area_id', $area->id);
+            $total = (clone $tasks)->count();
+
+            if ($total === 0) {
+                return [
+                    'area_id' => $area->id,
+                    'area_name' => $area->name,
+                    'process_identifier' => $area->process_identifier,
+                    'manager' => $area->manager?->name,
+                    'total' => 0,
+                    'by_status' => [],
+                    'completion_rate' => 0,
+                    'overdue' => 0,
+                    'without_progress' => 0,
+                    'oldest_pending_days' => null,
+                    'avg_days_without_update' => null,
+                ];
+            }
+
+            $byStatus = (clone $tasks)
+                ->select('status', DB::raw('count(*) as total'))
+                ->groupBy('status')
+                ->pluck('total', 'status');
+
+            $completed = $byStatus->get(TaskStatusEnum::COMPLETED->value, 0);
+            $completionRate = round(($completed / $total) * 100, 1);
+
+            $overdue = (clone $tasks)
+                ->where('due_date', '<', now())
+                ->whereNotIn('status', [TaskStatusEnum::COMPLETED->value, TaskStatusEnum::CANCELLED->value])
+                ->count();
+
+            $withoutProgress = (clone $tasks)
+                ->whereNotIn('status', [TaskStatusEnum::COMPLETED->value, TaskStatusEnum::CANCELLED->value])
+                ->whereDoesntHave('updates')
+                ->count();
+
+            $activeTasks = (clone $tasks)
+                ->whereNotIn('status', [TaskStatusEnum::COMPLETED->value, TaskStatusEnum::CANCELLED->value])
+                ->get();
+
+            $oldestPending = $activeTasks->min('created_at');
+            $oldestPendingDays = $oldestPending ? (int) $oldestPending->diffInDays(now()) : null;
+
+            // Average days without update for active tasks
+            $avgDays = null;
+            if ($activeTasks->isNotEmpty()) {
+                $totalDays = $activeTasks->sum(function ($task) {
+                    $lastUpdate = $task->updates()->latest()->first();
+                    return $lastUpdate
+                        ? (int) $lastUpdate->created_at->diffInDays(now())
+                        : (int) $task->created_at->diffInDays(now());
+                });
+                $avgDays = round($totalDays / $activeTasks->count(), 1);
+            }
+
+            return [
+                'area_id' => $area->id,
+                'area_name' => $area->name,
+                'process_identifier' => $area->process_identifier,
+                'manager' => $area->manager?->name,
+                'total' => $total,
+                'by_status' => $byStatus,
+                'completion_rate' => $completionRate,
+                'overdue' => $overdue,
+                'without_progress' => $withoutProgress,
+                'oldest_pending_days' => $oldestPendingDays,
+                'avg_days_without_update' => $avgDays,
+            ];
+        });
+
+        // Global summary
+        $totalTasks = Task::count();
+        $totalCompleted = Task::where('status', TaskStatusEnum::COMPLETED->value)->count();
+        $totalActive = Task::whereNotIn('status', [TaskStatusEnum::COMPLETED->value, TaskStatusEnum::CANCELLED->value])->count();
+        $totalOverdue = Task::where('due_date', '<', now())
+            ->whereNotIn('status', [TaskStatusEnum::COMPLETED->value, TaskStatusEnum::CANCELLED->value])
+            ->count();
+
+        return response()->json([
+            'summary' => [
+                'total_tasks' => $totalTasks,
+                'total_completed' => $totalCompleted,
+                'total_active' => $totalActive,
+                'total_overdue' => $totalOverdue,
+                'global_completion_rate' => $totalTasks > 0 ? round(($totalCompleted / $totalTasks) * 100, 1) : 0,
+            ],
+            'by_area' => $consolidated,
+        ]);
+    }
 }

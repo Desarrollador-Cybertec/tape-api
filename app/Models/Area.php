@@ -12,6 +12,7 @@ class Area extends Model
     protected $fillable = [
         'name',
         'description',
+        'process_identifier',
         'manager_user_id',
         'active',
     ];

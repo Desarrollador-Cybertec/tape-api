@@ -4,6 +4,7 @@ use App\Http\Controllers\AreaController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AutomationController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ImportController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\MessageTemplateController;
 use App\Http\Controllers\SystemSettingController;
@@ -49,6 +50,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Dashboard
     Route::get('/dashboard/general', [DashboardController::class, 'general']);
     Route::get('/dashboard/area/{area}', [DashboardController::class, 'byArea']);
+    Route::get('/dashboard/consolidated', [DashboardController::class, 'consolidated']);
     Route::get('/dashboard/me', [DashboardController::class, 'myDashboard']);
 
     // ── Configuration (superadmin) ──
@@ -64,4 +66,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/automation/detect-overdue', [AutomationController::class, 'triggerOverdueDetection']);
     Route::post('/automation/send-summary', [AutomationController::class, 'triggerDailySummary']);
     Route::post('/automation/send-reminders', [AutomationController::class, 'triggerDueReminders']);
+    Route::post('/automation/detect-inactivity', [AutomationController::class, 'triggerInactivityDetection']);
+
+    // Import (superadmin)
+    Route::post('/import/tasks', [ImportController::class, 'importTasks']);
 });

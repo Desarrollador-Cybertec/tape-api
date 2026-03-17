@@ -81,16 +81,32 @@ class SendDailyTaskSummary extends Command
             $lines[] = "Próximas a vencer ({$alertDays} días): {$dueSoon->count()}";
         }
 
-        $lines[] = '';
-
-        foreach ($tasks->take(10) as $task) {
-            $status = $task->status->value;
-            $due = $task->due_date ? $task->due_date->toDateString() : 'Sin fecha';
-            $lines[] = "- [{$status}] {$task->title} (Vence: {$due})";
+        $withoutUpdates = $tasks->filter(fn (Task $t) => $t->updates()->count() === 0);
+        if ($withoutUpdates->isNotEmpty()) {
+            $lines[] = "Sin avance reportado: {$withoutUpdates->count()}";
         }
 
-        if ($tasks->count() > 10) {
-            $remaining = $tasks->count() - 10;
+        $lines[] = '';
+
+        // Order by age: oldest first (created_at ascending)
+        $sorted = $tasks->sortBy('created_at');
+
+        foreach ($sorted->take(15) as $task) {
+            $status = $task->status->value;
+            $due = $task->due_date ? $task->due_date->toDateString() : 'Sin fecha';
+            $ageDays = (int) $task->created_at->diffInDays(now());
+
+            $lastUpdate = $task->updates()->latest()->first();
+            $daysSinceUpdate = $lastUpdate
+                ? (int) $lastUpdate->created_at->diffInDays(now())
+                : $ageDays;
+
+            $inactivityFlag = $daysSinceUpdate >= 7 ? ' ⚠' : '';
+            $lines[] = "- [{$status}] {$task->title} (Antigüedad: {$ageDays}d, Sin avance: {$daysSinceUpdate}d, Vence: {$due}){$inactivityFlag}";
+        }
+
+        if ($tasks->count() > 15) {
+            $remaining = $tasks->count() - 15;
             $lines[] = "... y {$remaining} más.";
         }
 

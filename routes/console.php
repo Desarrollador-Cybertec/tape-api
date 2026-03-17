@@ -20,3 +20,6 @@ Schedule::command('tasks:send-daily-summary')
 
 Schedule::command('tasks:send-due-reminders')
     ->dailyAt($canReadSettings ? SystemSetting::getValue('send_reminders_time', '08:00') : '08:00');
+
+Schedule::command('tasks:detect-inactive')
+    ->dailyAt($canReadSettings ? SystemSetting::getValue('inactivity_alert_time', '09:00') : '09:00');

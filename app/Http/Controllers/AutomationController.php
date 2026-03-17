@@ -90,6 +90,35 @@ class AutomationController extends Controller
         ]);
     }
 
+    /**
+     * Manually trigger inactivity detection.
+     */
+    public function triggerInactivityDetection(Request $request): JsonResponse
+    {
+        $this->authorizeSuperAdmin($request);
+
+        $enabled = SystemSetting::getValue('inactivity_alert_enabled', true);
+        if (!$enabled) {
+            return response()->json([
+                'message' => 'Las alertas de inactividad están desactivadas. Actívelas en configuración.',
+            ], 422);
+        }
+
+        Artisan::call('tasks:detect-inactive');
+
+        ActivityLog::create([
+            'user_id' => $request->user()->id,
+            'module' => 'automation',
+            'action' => 'trigger_inactivity_detection',
+            'description' => 'Detección de inactividad ejecutada manualmente',
+        ]);
+
+        return response()->json([
+            'message' => 'Detección de inactividad ejecutada correctamente',
+            'output' => trim(Artisan::output()),
+        ]);
+    }
+
     private function authorizeSuperAdmin(Request $request): void
     {
         if (!$request->user()->isSuperAdmin()) {

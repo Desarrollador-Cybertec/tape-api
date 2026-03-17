@@ -53,7 +53,14 @@ class TaskController extends Controller
             ->when($request->query('area_id'), fn ($q, $areaId) =>
                 $q->where('area_id', $areaId)
             )
-            ->latest()
+            ->when($request->query('sort'), function ($q, $sort) {
+                return match ($sort) {
+                    'oldest' => $q->oldest(),
+                    'due_date' => $q->orderBy('due_date'),
+                    'priority' => $q->orderByRaw("CASE priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END"),
+                    default => $q->latest(),
+                };
+            }, fn ($q) => $q->latest())
             ->paginate(20);
 
         return TaskResource::collection($tasks);

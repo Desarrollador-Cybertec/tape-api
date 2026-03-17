@@ -9,6 +9,12 @@ class TaskResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $lastUpdate = $this->updates()->latest()->first();
+        $ageDays = (int) $this->created_at->diffInDays(now());
+        $daysSinceUpdate = $lastUpdate
+            ? (int) $lastUpdate->created_at->diffInDays(now())
+            : $ageDays;
+
         return [
             'id' => $this->id,
             'title' => $this->title,
@@ -37,6 +43,8 @@ class TaskResource extends JsonResource
             'progress_percent' => $this->progress_percent,
             'meeting' => new MeetingResource($this->whenLoaded('meeting')),
             'is_overdue' => $this->isOverdue(),
+            'age_days' => $ageDays,
+            'days_without_update' => $daysSinceUpdate,
             'comments_count' => $this->whenCounted('comments'),
             'attachments_count' => $this->whenCounted('attachments'),
             'updates_count' => $this->whenCounted('updates'),

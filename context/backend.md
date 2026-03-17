@@ -61,7 +61,7 @@ php artisan test
 php vendor/bin/phpunit --testdox
 ```
 
-80 tests, 187 assertions — todos pasando.
+138 tests, 316 assertions — todos pasando.
 
 ### 4. Scheduler (producción)
 
@@ -75,6 +75,7 @@ Comandos programados:
 - `tasks:detect-overdue` — 06:00 diario
 - `tasks:send-daily-summary` — 07:00 diario
 - `tasks:send-due-reminders` — 08:00 diario
+- `tasks:detect-inactive` — 09:00 diario
 
 ---
 
@@ -82,10 +83,10 @@ Comandos programados:
 
 ```
 app/
-├── Console/Commands/   # DetectOverdueTasks, SendDailyTaskSummary, SendDueReminders
+├── Console/Commands/   # DetectOverdueTasks, SendDailyTaskSummary, SendDueReminders, DetectInactiveTasks
 ├── Enums/              # TaskStatusEnum, TaskPriorityEnum, RoleEnum, UpdateTypeEnum, etc.
 ├── Http/
-│   ├── Controllers/    # Auth, User, Area, Meeting, Task, Dashboard
+│   ├── Controllers/    # Auth, User, Area, Meeting, Task, Dashboard, Automation, Import
 │   ├── Requests/       # Form Requests con validación y autorización
 │   └── Resources/      # API Resources para respuestas JSON consistentes
 ├── Models/             # Eloquent models con relaciones
@@ -120,7 +121,7 @@ app/
 - `belongsTo` manager (User)
 - `belongsToMany` users (via `area_members`)
 - `hasMany` Tasks
-- Campos: `name`, `description`, `manager_user_id`, `active`
+- Campos: `name`, `description`, `process_identifier`, `manager_user_id`, `active`
 
 ### AreaMember
 - `belongsTo` Area, User, assignedByUser, claimedByUser
@@ -266,7 +267,16 @@ Base URL: `/api`
 |--------|-----------------------------|-----------------------------------|-----------------|
 | GET    | `/dashboard/general`        | Dashboard gerencial general       | superadmin       |
 | GET    | `/dashboard/area/{id}`      | Dashboard por área                | superadmin, manager del área |
+| GET    | `/dashboard/consolidated`   | Consolidado por proceso/área (tipo Excel) | superadmin |
 | GET    | `/dashboard/me`             | Dashboard personal del usuario    | todos            |
+
+### Importación
+
+| Método | Endpoint                    | Descripción                        | Roles permitidos |
+|--------|-----------------------------|-----------------------------------|------------------|
+| POST   | `/import/tasks`             | Importar tareas desde CSV          | superadmin       |
+
+Columnas CSV esperadas: `titulo`, `descripcion`, `responsable_email`, `area`, `prioridad`, `estado`, `fecha_inicio`, `fecha_limite`. Solo `titulo` es obligatorio.
 
 ---
 
@@ -332,8 +342,24 @@ Antes de enviar a revisión (`submit-review`), se valida:
 - `notify_on_overdue` — Alerta cuando la tarea está vencida.
 - `notify_on_completion` — Notificación al completar.
 - El comando `tasks:detect-overdue` cambia automáticamente el estado a `overdue`.
-- El comando `tasks:send-daily-summary` envía resúmenes consolidados por responsable.
+- El comando `tasks:send-daily-summary` envía resúmenes consolidados por responsable, ordenados por antigüedad, con indicadores de inactividad.
 - El comando `tasks:send-due-reminders` envía recordatorios individuales por tarea.
+- El comando `tasks:detect-inactive` detecta tareas sin avance reportado en X días y envía alertas consolidadas por responsable.
+
+### Dashboard Consolidado (`/dashboard/consolidated`)
+Retorna:
+- Resumen global: total, completadas, activas, vencidas, tasa de cumplimiento
+- Por cada área/proceso: total, por estado, tasa de cierre, vencidas, sin avance, antigüedad máxima, promedio de días sin reportar
+- Incluye `process_identifier` para mapeo con hojas de Excel legacy
+
+### Importación de Tareas
+- Endpoint: `POST /api/import/tasks` (multipart/form-data, campo `file`)
+- Acepta CSV con columnas en español
+- Auto-crea áreas con `process_identifier` si no existen
+- Mapea prioridades y estados en español/inglés
+- Soporta múltiples formatos de fecha (Y-m-d, d/m/Y, m/d/Y, d-m-Y)
+- Asigna responsable por email
+- Operación transaccional con reporte de errores por fila
 
 ### Dashboard Gerencial (`/dashboard/general`)
 Retorna:
@@ -447,18 +473,24 @@ Retorna:
 
 ## Tests
 
-80 tests organizados por feature:
+138 tests organizados por feature, 316 assertions:
 
-| Suite               | Tests | Cobertura                                                                |
-|---------------------|-------|--------------------------------------------------------------------------|
-| AuthTest            | 5     | Login, logout, perfil, credenciales inválidas, usuario inactivo          |
-| UserTest            | 7     | CRUD, cambio de rol, activar/desactivar, validaciones                    |
-| AreaTest            | 6     | CRUD, asignar encargado, reclamar trabajador, validaciones               |
-| MeetingTest         | 10    | CRUD, permisos, vinculación con tareas, filtrado por área                |
-| TaskTest            | 15    | CRUD, delegación, flujo completo de estados, adjuntos, comentarios       |
-| TaskUpdateTest      | 6     | Avances, validaciones, permisos, sincronización de progreso              |
-| DashboardTest       | 7     | Dashboard general, por área, personal, permisos, métricas de vencimiento |
-| ScheduledCommandsTest| 5    | Detección overdue, resumen diario, recordatorios, flags de notificación  |
+| Suite                      | Tests | Cobertura                                                                |
+|----------------------------|-------|--------------------------------------------------------------------------|
+| AuthTest                   | 7     | Login, logout, perfil, credenciales inválidas, usuario inactivo, validaciones |
+| UserTest                   | 9     | CRUD, cambio de rol, activar/desactivar, validaciones                    |
+| AreaTest                   | 7     | CRUD, asignar encargado, reclamar trabajador, validaciones               |
+| MeetingTest                | 10    | CRUD, permisos, vinculación con tareas, filtrado por área                |
+| TaskTest                   | 25    | CRUD, delegación, flujo completo de estados, adjuntos, comentarios       |
+| TaskUpdateTest             | 6     | Avances, validaciones, permisos, sincronización de progreso              |
+| DashboardTest              | 7     | Dashboard general, por área, personal, permisos, métricas               |
+| ConsolidatedDashboardTest  | 7     | Dashboard consolidado por proceso, permisos, áreas vacías, múltiples áreas |
+| ScheduledCommandsTest      | 6     | Detección overdue, resumen diario, recordatorios, flags de notificación  |
+| SystemSettingTest           | 10    | CRUD, agrupación, filtrado, casteo de tipos, permisos                    |
+| MessageTemplateTest        | 9     | CRUD, activar/desactivar, validaciones, permisos                         |
+| AutomationTest             | 11    | Triggers manuales, permisos, configuración enabled/disabled              |
+| InactivityDetectionTest    | 10    | Detección de inactividad, configuración, consolidación, permisos, trigger API |
+| ImportTest                 | 11    | Importación CSV, creación de áreas, mapeo de estados/prioridades/fechas, permisos |
 
 Todos los tests usan `RefreshDatabase` con SQLite in-memory para velocidad.
 
@@ -482,6 +514,9 @@ Todos los tests usan `RefreshDatabase` con SQLite in-memory para velocidad.
 | 12    | meetings                | Reuniones / origen de compromisos     |
 | 13    | tasks (modificación)    | Agrega `meeting_id`, flags de notificación, `progress_percent` |
 | 14    | task_updates            | Reportes de avance/seguimiento        |
+| 15    | system_settings         | Configuración clave-valor del sistema |
+| 16    | message_templates       | Plantillas de mensajes editables      |
+| 17    | areas (mod)             | Agrega `process_identifier`           |
 
 ---
 
@@ -490,5 +525,22 @@ Todos los tests usan `RefreshDatabase` con SQLite in-memory para velocidad.
 | Comando                       | Descripción                                           | Horario     |
 |-------------------------------|-------------------------------------------------------|-------------|
 | `tasks:detect-overdue`        | Marca como vencidas las tareas pasadas de fecha        | 06:00 diario|
-| `tasks:send-daily-summary`    | Genera resúmenes consolidados por responsable          | 07:00 diario|
+| `tasks:send-daily-summary`    | Genera resúmenes consolidados por responsable (ordenados por antigüedad, con indicadores de inactividad) | 07:00 diario|
 | `tasks:send-due-reminders`    | Envía recordatorios para tareas próximas a vencer      | 08:00 diario|
+| `tasks:detect-inactive`       | Detecta tareas sin avance en X días y envía alertas consolidadas por responsable | 09:00 diario|
+
+### API de Tareas — Campos Computados en TaskResource
+
+| Campo                 | Tipo    | Descripción                                                    |
+|-----------------------|---------|----------------------------------------------------------------|
+| `age_days`            | integer | Días desde la creación de la tarea                             |
+| `days_without_update` | integer | Días desde el último TaskUpdate (o desde creación si no tiene) |
+| `is_overdue`          | boolean | Si la tarea pasó su fecha de vencimiento                       |
+
+### Ordenamiento de Tareas
+
+El endpoint `GET /tasks` acepta `?sort=` con los valores:
+- `oldest` — Por antigüedad (más viejas primero)
+- `due_date` — Por fecha de vencimiento
+- `priority` — Por prioridad (critical → urgent → high → medium → low)
+- (default) — Más recientes primero

@@ -104,6 +104,29 @@ class SystemConfigSeeder extends Seeder
                 'group' => 'automation',
                 'description' => 'Hora de envío de recordatorios (HH:MM)',
             ],
+
+            // Inactivity alerts
+            [
+                'key' => 'inactivity_alert_enabled',
+                'value' => '1',
+                'type' => 'boolean',
+                'group' => 'automation',
+                'description' => 'Activar alertas por inactividad (tareas sin avance)',
+            ],
+            [
+                'key' => 'inactivity_alert_days',
+                'value' => '7',
+                'type' => 'integer',
+                'group' => 'automation',
+                'description' => 'Días sin avance para generar alerta de inactividad',
+            ],
+            [
+                'key' => 'inactivity_alert_time',
+                'value' => '09:00',
+                'type' => 'string',
+                'group' => 'automation',
+                'description' => 'Hora de ejecución de detección de inactividad (HH:MM)',
+            ],
         ];
 
         foreach ($settings as $setting) {
@@ -158,6 +181,12 @@ class SystemConfigSeeder extends Seeder
                 'name' => 'Resumen diario de tareas',
                 'subject' => 'Resumen diario de tareas - {date}',
                 'body' => "Hola {user_name},\n\n{summary_content}",
+            ],
+            [
+                'slug' => 'inactivity_alert',
+                'name' => 'Alerta por inactividad',
+                'subject' => 'Alerta: Tareas sin avance desde hace {inactivity_days} días',
+                'body' => "Hola {user_name},\n\nTienes tareas sin reportar avance en los últimos {inactivity_days} días:\n\n{task_list}\n\nPor favor actualiza el estado de estas tareas.",
             ],
         ];
 

@@ -423,6 +423,7 @@
                 <a href="#tasks">Tareas</a>
                 <a href="#task-updates">Avances de tareas</a>
                 <a href="#dashboard">Dashboard</a>
+                <a href="#import">Importación</a>
             </div>
             <div class="sidebar-section">
                 <div class="sidebar-section-title">Negocio</div>
@@ -461,7 +462,7 @@
                 seguimiento de avances, notificaciones automáticas consolidadas y dashboards analíticos.
             </p>
             <div class="hero-badges">
-                <span class="badge"><span class="badge-dot green"></span> 110 tests passing</span>
+                <span class="badge"><span class="badge-dot green"></span> 138 tests passing</span>
                 <span class="badge"><span class="badge-dot blue"></span> Laravel 12</span>
                 <span class="badge"><span class="badge-dot purple"></span> Sanctum Auth</span>
                 <span class="badge"><span class="badge-dot yellow"></span> PostgreSQL / Supabase</span>
@@ -861,6 +862,29 @@ Content-Type: application/json
                 </table>
             </div>
 
+            <h4>Query params — Filtrar tareas</h4>
+            <pre><code>GET /api/tasks?status=pending&priority=high&area_id=1&sort=oldest</code></pre>
+
+            <h4>Opciones de ordenamiento (<code>?sort=</code>)</h4>
+            <div class="enum-list">
+                <span class="enum-val">oldest</span>
+                <span class="enum-val">due_date</span>
+                <span class="enum-val">priority</span>
+            </div>
+            <p>Por defecto, las tareas se ordenan por más recientes primero.</p>
+
+            <h4>Campos computados en respuesta de tareas</h4>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Campo</th><th>Tipo</th><th>Descripción</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>age_days</code></td><td>integer</td><td>Días desde la creación</td></tr>
+                        <tr><td><code>days_without_update</code></td><td>integer</td><td>Días desde el último reporte de avance</td></tr>
+                        <tr><td><code>is_overdue</code></td><td>boolean</td><td>Si la tarea pasó su fecha límite</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
             <h4>Body — Crear tarea</h4>
             <pre><code>{
     "title": "Preparar informe trimestral",
@@ -979,6 +1003,12 @@ attachment_type: evidence | support | final_delivery</code></pre>
                         </tr>
                         <tr>
                             <td><span class="method method-get">GET</span></td>
+                            <td class="endpoint">/api/dashboard/consolidated</td>
+                            <td>Consolidado operativo por proceso/área</td>
+                            <td><span class="role-badge">superadmin</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="method method-get">GET</span></td>
                             <td class="endpoint">/api/dashboard/me</td>
                             <td>Dashboard personal</td>
                             <td>Todos</td>
@@ -1006,6 +1036,9 @@ attachment_type: evidence | support | final_delivery</code></pre>
             <h3>Dashboard por Área</h3>
             <p>Tareas por estado del área, vencidas, distribución por responsable, tasa de cierre, tareas sin reportes de avance.</p>
 
+            <h3>Dashboard Consolidado</h3>
+            <p>Reporte tipo Excel por proceso/área con métricas completas. Cada área incluye: <code>process_identifier</code>, total, conteo por estado, tasa de cierre, vencidas, sin avance, antigüedad máxima del pendiente más viejo, promedio de días sin reportar. Incluye resumen global.</p>
+
             <h3>Dashboard Personal</h3>
             <p>Tareas activas, vencidas, próximas a vencer, completadas, distribución por estado, lista de tareas próximas ordenadas por fecha.</p>
         </div>
@@ -1027,7 +1060,7 @@ attachment_type: evidence | support | final_delivery</code></pre>
                 <li><code>belongsTo</code> manager (User)</li>
                 <li><code>belongsToMany</code> users (via <code>area_members</code>)</li>
                 <li><code>hasMany</code> Tasks</li>
-                <li>Campos: <code>name</code>, <code>description</code>, <code>manager_user_id</code>, <code>active</code></li>
+                <li>Campos: <code>name</code>, <code>description</code>, <code>process_identifier</code>, <code>manager_user_id</code>, <code>active</code></li>
             </ul>
 
             <h3>Task (SoftDeletes)</h3>
@@ -1291,13 +1324,18 @@ attachment_type: evidence | support | final_delivery</code></pre>
                         </tr>
                         <tr>
                             <td><code>tasks:send-daily-summary</code></td>
-                            <td>Genera resúmenes consolidados por responsable. Usa <code>alert_days_before_due</code> para determinar tareas próximas a vencer.</td>
+                            <td>Genera resúmenes consolidados por responsable. Tareas ordenadas por antigüedad (más viejas primero). Incluye días de antigüedad, días sin avance, y flag de inactividad (⚠ si ≥7 días sin avance). Usa <code>alert_days_before_due</code> para determinar tareas próximas a vencer.</td>
                             <td><code>daily_summary_enabled</code>, <code>daily_summary_time</code> (default: 07:00)</td>
                         </tr>
                         <tr>
                             <td><code>tasks:send-due-reminders</code></td>
                             <td>Envía recordatorios individuales para tareas con <code>notify_on_due</code> y alertas para tareas con <code>notify_on_overdue</code>. Usa <code>alert_days_before_due</code> configurable.</td>
                             <td><code>emails_enabled</code>, <code>send_reminders_time</code> (default: 08:00)</td>
+                        </tr>
+                        <tr>
+                            <td><code>tasks:detect-inactive</code></td>
+                            <td>Detecta tareas en progreso o pendientes que no tienen reportes de avance en X días. Agrupa por responsable y envía UNA notificación consolidada por persona con listado de tareas inactivas y días sin avance.</td>
+                            <td><code>inactivity_alert_enabled</code>, <code>inactivity_alert_days</code> (default: 7), <code>inactivity_alert_time</code> (default: 09:00)</td>
                         </tr>
                     </tbody>
                 </table>
@@ -1352,6 +1390,9 @@ attachment_type: evidence | support | final_delivery</code></pre>
                         <tr><td><code>daily_summary_time</code></td><td>string</td><td>automation</td><td>07:00</td><td>Hora del resumen diario</td></tr>
                         <tr><td><code>send_reminders_enabled</code></td><td>boolean</td><td>automation</td><td>true</td><td>Activar recordatorios automáticos</td></tr>
                         <tr><td><code>send_reminders_time</code></td><td>string</td><td>automation</td><td>08:00</td><td>Hora de recordatorios</td></tr>
+                        <tr><td><code>inactivity_alert_enabled</code></td><td>boolean</td><td>automation</td><td>true</td><td>Activar alertas por inactividad</td></tr>
+                        <tr><td><code>inactivity_alert_days</code></td><td>integer</td><td>automation</td><td>7</td><td>Días sin avance para alertar</td></tr>
+                        <tr><td><code>inactivity_alert_time</code></td><td>string</td><td>automation</td><td>09:00</td><td>Hora de detección de inactividad</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1389,9 +1430,52 @@ attachment_type: evidence | support | final_delivery</code></pre>
                         <tr><td><code>task_approved</code></td><td>Tarea aprobada</td><td>{task_title}, {user_name}</td></tr>
                         <tr><td><code>task_rejected</code></td><td>Tarea rechazada</td><td>{task_title}, {user_name}, {rejection_reason}</td></tr>
                         <tr><td><code>daily_summary</code></td><td>Resumen diario</td><td>{user_name}, {date}, {summary_content}</td></tr>
+                        <tr><td><code>inactivity_alert</code></td><td>Alerta de inactividad</td><td>{user_name}, {inactivity_days}, {task_list}</td></tr>
                     </tbody>
                 </table>
             </div>
+        </div>
+
+        {{-- ═══════════════ IMPORT ═══════════════ --}}
+        <div class="section" id="import">
+            <h2>Importación CSV</h2>
+            <p>Importa tareas masivamente desde un archivo CSV. Solo accesible por <strong>superadmin</strong>. Crea áreas automáticamente si no existen.</p>
+
+            <h4><span class="method method-post">POST</span> /api/import/tasks</h4>
+            <p>Acepta un archivo CSV (<code>multipart/form-data</code>, campo: <code>file</code>) con las siguientes columnas:</p>
+
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Columna</th><th>Requerida</th><th>Descripción</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>titulo</code></td><td>Sí</td><td>Título de la tarea</td></tr>
+                        <tr><td><code>descripcion</code></td><td>No</td><td>Descripción de la tarea</td></tr>
+                        <tr><td><code>responsable_email</code></td><td>Sí</td><td>Email del usuario responsable (debe existir)</td></tr>
+                        <tr><td><code>area</code></td><td>No</td><td>Nombre del área — se crea si no existe</td></tr>
+                        <tr><td><code>prioridad</code></td><td>No</td><td>alta, media, baja (default: media)</td></tr>
+                        <tr><td><code>estado</code></td><td>No</td><td>pendiente, en_progreso, completada, cancelada (default: pendiente)</td></tr>
+                        <tr><td><code>fecha_inicio</code></td><td>No</td><td>Formatos: YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY</td></tr>
+                        <tr><td><code>fecha_limite</code></td><td>No</td><td>Formatos: YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h4>Respuesta exitosa</h4>
+            <pre><code>{
+    "message": "Importación completada",
+    "imported": 15,
+    "errors": []
+}</code></pre>
+
+            <h4>Respuesta con errores parciales</h4>
+            <pre><code>{
+    "message": "Importación completada con errores",
+    "imported": 12,
+    "errors": [
+        {"row": 3, "error": "responsable_email es requerido"},
+        {"row": 7, "error": "Usuario no encontrado: unknown@mail.com"}
+    ]
+}</code></pre>
         </div>
 
         {{-- ═══════════════ AUTOMATION ═══════════════ --}}
@@ -1407,6 +1491,9 @@ attachment_type: evidence | support | final_delivery</code></pre>
 
             <h4><span class="method method-post">POST</span> /api/automation/send-reminders</h4>
             <p>Envía recordatorios de vencimiento. Falla con <code>422</code> si <code>emails_enabled</code> está desactivado.</p>
+
+            <h4><span class="method method-post">POST</span> /api/automation/detect-inactivity</h4>
+            <p>Ejecuta la detección de tareas inactivas. Falla con <code>422</code> si <code>inactivity_alert_enabled</code> está desactivado.</p>
 
             <pre><code>// Respuesta exitosa (200)
 {
@@ -1516,6 +1603,7 @@ attachment_type: evidence | support | final_delivery</code></pre>
                         <tr><td>14</td><td><code>task_updates</code></td><td>Reportes de avance/seguimiento</td></tr>
                         <tr><td>15</td><td><code>system_settings</code></td><td>Configuración clave-valor del sistema</td></tr>
                         <tr><td>16</td><td><code>message_templates</code></td><td>Plantillas de mensajes editables</td></tr>
+                        <tr><td>17</td><td><code>areas</code> (mod)</td><td>Agrega <code>process_identifier</code> para mapeo con Excel</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1524,7 +1612,7 @@ attachment_type: evidence | support | final_delivery</code></pre>
         {{-- ═══════════════ TESTS ═══════════════ --}}
         <div class="section" id="tests">
             <h2>Tests</h2>
-            <p>110 tests organizados por feature, 244 assertions — todos pasando con SQLite in-memory.</p>
+            <p>138 tests organizados por feature, 316 assertions — todos pasando con SQLite in-memory.</p>
 
             <div class="table-wrap">
                 <table>
@@ -1541,6 +1629,9 @@ attachment_type: evidence | support | final_delivery</code></pre>
                         <tr><td><code>SystemSettingTest</code></td><td>10</td><td>CRUD, agrupación, filtrado, casteo de tipos, permisos</td></tr>
                         <tr><td><code>MessageTemplateTest</code></td><td>9</td><td>CRUD, activar/desactivar, validaciones, permisos</td></tr>
                         <tr><td><code>AutomationTest</code></td><td>11</td><td>Triggers manuales, permisos, configuración enabled/disabled</td></tr>
+                        <tr><td><code>InactivityDetectionTest</code></td><td>10</td><td>Detección de inactividad, consolidación, configuración, trigger API</td></tr>
+                        <tr><td><code>ConsolidatedDashboardTest</code></td><td>7</td><td>Dashboard consolidado, proceso/área, permisos, múltiples áreas</td></tr>
+                        <tr><td><code>ImportTest</code></td><td>11</td><td>Importación CSV, áreas automáticas, mapeo estados/fechas, permisos</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1552,7 +1643,7 @@ php vendor/bin/phpunit --testdox</code></pre>
 
         {{-- Footer --}}
         <div style="border-top:1px solid var(--border); padding-top:24px; margin-top:48px; text-align:center; color:var(--text-muted); font-size:13px;">
-            TAPE API v1.1 &middot; Laravel {{ app()->version() }} &middot; PHP {{ PHP_VERSION }}
+            TAPE API v1.2 &middot; Laravel {{ app()->version() }} &middot; PHP {{ PHP_VERSION }}
         </div>
 
     </main>
