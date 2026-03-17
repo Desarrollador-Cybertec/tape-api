@@ -162,4 +162,81 @@ class AreaTest extends TestCase
         $response->assertOk();
         $this->assertEquals('New Name', $area->fresh()->name);
     }
+
+    public function test_area_manager_can_list_available_workers_excluding_area_members(): void
+    {
+        $manager = $this->createUser(RoleEnum::AREA_MANAGER);
+        $area = Area::create(['name' => 'Área Test', 'manager_user_id' => $manager->id]);
+
+        $inArea = $this->createUser(RoleEnum::WORKER);
+        $available = $this->createUser(RoleEnum::WORKER);
+
+        AreaMember::create([
+            'area_id' => $area->id,
+            'user_id' => $inArea->id,
+            'assigned_by' => $manager->id,
+            'joined_at' => now(),
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($manager, 'sanctum')
+            ->getJson("/api/areas/{$area->id}/available-workers");
+
+        $response->assertOk();
+        $ids = collect($response->json('data'))->pluck('id');
+        $this->assertContains($available->id, $ids->toArray());
+        $this->assertNotContains($inArea->id, $ids->toArray());
+    }
+
+    public function test_available_workers_does_not_exclude_workers_from_other_areas(): void
+    {
+        $manager = $this->createUser(RoleEnum::AREA_MANAGER);
+        $area1 = Area::create(['name' => 'Área 1', 'manager_user_id' => $manager->id]);
+        $area2 = Area::create(['name' => 'Área 2', 'manager_user_id' => $manager->id]);
+
+        $workerInArea2 = $this->createUser(RoleEnum::WORKER);
+
+        AreaMember::create([
+            'area_id' => $area2->id,
+            'user_id' => $workerInArea2->id,
+            'assigned_by' => $manager->id,
+            'joined_at' => now(),
+            'is_active' => true,
+        ]);
+
+        // Worker is in area2, but should still appear as available for area1
+        $response = $this->actingAs($manager, 'sanctum')
+            ->getJson("/api/areas/{$area1->id}/available-workers");
+
+        $response->assertOk();
+        $ids = collect($response->json('data'))->pluck('id');
+        $this->assertContains($workerInArea2->id, $ids->toArray());
+    }
+
+    public function test_worker_cannot_list_available_workers(): void
+    {
+        $worker = $this->createUser(RoleEnum::WORKER);
+        $area = Area::create(['name' => 'Área Test']);
+
+        $this->actingAs($worker, 'sanctum')
+            ->getJson("/api/areas/{$area->id}/available-workers")
+            ->assertForbidden();
+    }
+
+    public function test_available_workers_supports_search_filter(): void
+    {
+        $manager = $this->createUser(RoleEnum::AREA_MANAGER);
+        $area = Area::create(['name' => 'Área Test', 'manager_user_id' => $manager->id]);
+
+        $matching = $this->createUser(RoleEnum::WORKER, ['name' => 'Ana García']);
+        $notMatching = $this->createUser(RoleEnum::WORKER, ['name' => 'Pedro López']);
+
+        $response = $this->actingAs($manager, 'sanctum')
+            ->getJson("/api/areas/{$area->id}/available-workers?search=Ana");
+
+        $response->assertOk();
+        $ids = collect($response->json('data'))->pluck('id');
+        $this->assertContains($matching->id, $ids->toArray());
+        $this->assertNotContains($notMatching->id, $ids->toArray());
+    }
 }

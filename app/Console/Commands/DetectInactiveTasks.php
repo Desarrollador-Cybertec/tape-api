@@ -29,6 +29,7 @@ class DetectInactiveTasks extends Command
                 TaskStatusEnum::PENDING->value,
             ])
             ->whereNotNull('current_responsible_user_id')
+            ->with('latestUpdate')
             ->where(function ($query) use ($cutoff) {
                 $query->where(function ($q) use ($cutoff) {
                     // Has updates but last one is older than cutoff
@@ -51,7 +52,7 @@ class DetectInactiveTasks extends Command
             $lines[] = '';
 
             foreach ($tasks as $task) {
-                $lastUpdate = $task->updates()->latest()->first();
+                $lastUpdate = $task->latestUpdate;
                 $daysSince = $lastUpdate
                     ? (int) $lastUpdate->created_at->diffInDays(now())
                     : (int) $task->created_at->diffInDays(now());

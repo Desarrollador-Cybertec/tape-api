@@ -11,6 +11,9 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 $canReadSettings = Schema::hasTable('system_settings');
+if ($canReadSettings) {
+    SystemSetting::preload();
+}
 
 Schedule::command('tasks:detect-overdue')
     ->dailyAt($canReadSettings ? SystemSetting::getValue('detect_overdue_time', '06:00') : '06:00');

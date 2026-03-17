@@ -14,18 +14,52 @@ class SystemSetting extends Model
         'description',
     ];
 
+    protected static array $cache = [];
+
+    /**
+     * Preload all settings into memory (single query).
+     */
+    public static function preload(): void
+    {
+        static::$cache = [];
+        foreach (static::all() as $setting) {
+            static::$cache[$setting->key] = $setting->castValue();
+        }
+    }
+
+    /**
+     * Flush the in-memory cache.
+     */
+    public static function flushCache(): void
+    {
+        static::$cache = [];
+    }
+
+    protected static function booted(): void
+    {
+        static::saved(fn () => static::$cache = []);
+        static::deleted(fn () => static::$cache = []);
+    }
+
     /**
      * Get a setting value by key, with optional default.
      */
     public static function getValue(string $key, mixed $default = null): mixed
     {
+        if (array_key_exists($key, static::$cache)) {
+            return static::$cache[$key];
+        }
+
         $setting = static::where('key', $key)->first();
 
         if (!$setting) {
+            static::$cache[$key] = $default;
             return $default;
         }
 
-        return $setting->castValue();
+        $value = $setting->castValue();
+        static::$cache[$key] = $value;
+        return $value;
     }
 
     /**

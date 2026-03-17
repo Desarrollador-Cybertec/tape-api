@@ -95,6 +95,11 @@ class TaskPolicy
         return $task->created_by === $user->id;
     }
 
+    public function delete(User $user, Task $task): bool
+    {
+        return $user->isSuperAdmin();
+    }
+
     public function comment(User $user, Task $task): bool
     {
         return $this->view($user, $task);

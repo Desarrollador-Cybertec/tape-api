@@ -6,7 +6,9 @@ use App\Http\Requests\ClaimWorkerRequest;
 use App\Http\Requests\StoreAreaRequest;
 use App\Http\Requests\UpdateAreaRequest;
 use App\Http\Resources\AreaResource;
+use App\Http\Resources\UserResource;
 use App\Models\Area;
+use App\Models\User;
 use App\Services\AreaClaimService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -89,5 +91,25 @@ class AreaController extends Controller
             'message' => 'Trabajador reclamado exitosamente.',
             'member' => $member->load(['user', 'area']),
         ], 201);
+    }
+
+    public function availableWorkers(Request $request, Area $area): AnonymousResourceCollection
+    {
+        $this->authorize('claimWorker', $area);
+
+        $users = User::with('role')
+            ->whereHas('role', fn ($q) => $q->where('slug', 'worker'))
+            ->where('active', true)
+            ->whereDoesntHave('activeAreas', fn ($q) => $q->where('areas.id', $area->id))
+            ->when($request->query('search'), fn ($q, $search) =>
+                $q->where(function ($sq) use ($search) {
+                    $sq->where('name', 'like', "%{$search}%")
+                       ->orWhere('email', 'like', "%{$search}%");
+                })
+            )
+            ->orderBy('name')
+            ->paginate(20);
+
+        return UserResource::collection($users);
     }
 }

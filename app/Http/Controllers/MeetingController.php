@@ -6,6 +6,7 @@ use App\Http\Requests\StoreMeetingRequest;
 use App\Http\Requests\UpdateMeetingRequest;
 use App\Http\Resources\MeetingResource;
 use App\Models\ActivityLog;
+use App\Models\Area;
 use App\Models\Meeting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,7 +25,7 @@ class MeetingController extends Controller
             ->when(!$user->isSuperAdmin(), function ($q) use ($user) {
                 $q->where(function ($query) use ($user) {
                     $query->where('created_by', $user->id)
-                        ->orWhereIn('area_id', $user->managedAreas()->pluck('id'));
+                        ->orWhereIn('area_id', Area::where('manager_user_id', $user->id)->select('id'));
                 });
             })
             ->when($request->query('area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))

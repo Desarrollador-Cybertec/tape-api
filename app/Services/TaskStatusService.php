@@ -53,7 +53,8 @@ class TaskStatusService
                 'description' => "Estado cambiado de {$oldStatus->value} a {$newStatus->value}",
             ]);
 
-            return $task->fresh();
+            $task->refresh();
+            return $task;
         });
     }
 

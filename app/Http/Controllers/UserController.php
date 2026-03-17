@@ -28,6 +28,11 @@ class UserController extends Controller
             ->when($request->has('active'), fn ($q) =>
                 $q->where('active', $request->boolean('active'))
             )
+            ->when($request->query('exclude_area'), fn ($q, $areaId) =>
+                $q->whereDoesntHave('activeAreas', fn ($aq) =>
+                    $aq->where('areas.id', $areaId)
+                )
+            )
             ->orderBy('name')
             ->paginate(20);
 
@@ -55,7 +60,7 @@ class UserController extends Controller
     {
         $user->update($request->validated());
 
-        return new UserResource($user->fresh('role'));
+        return new UserResource($user->fresh(['role', 'activeAreas']));
     }
 
     public function updateRole(Request $request, User $user): UserResource
@@ -68,7 +73,7 @@ class UserController extends Controller
 
         $user->update(['role_id' => $request->role_id]);
 
-        return new UserResource($user->fresh('role'));
+        return new UserResource($user->fresh(['role', 'activeAreas']));
     }
 
     public function toggleActive(User $user): UserResource
@@ -77,6 +82,6 @@ class UserController extends Controller
 
         $user->update(['active' => !$user->active]);
 
-        return new UserResource($user->fresh('role'));
+        return new UserResource($user->fresh(['role', 'activeAreas']));
     }
 }

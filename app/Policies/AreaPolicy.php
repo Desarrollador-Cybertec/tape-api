@@ -48,4 +48,13 @@ class AreaPolicy
 
         return $area->manager_user_id === $user->id;
     }
+
+    public function availableWorkers(User $user, Area $area): bool
+    {
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return $area->manager_user_id === $user->id;
+    }
 }

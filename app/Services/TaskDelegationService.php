@@ -76,7 +76,8 @@ class TaskDelegationService
                 'description' => "Tarea delegada a {$toUser->name}",
             ]);
 
-            return $task->fresh();
+            $task->refresh();
+            return $task;
         });
     }
 }

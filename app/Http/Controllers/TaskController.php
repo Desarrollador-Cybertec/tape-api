@@ -15,6 +15,7 @@ use App\Http\Resources\TaskAttachmentResource;
 use App\Http\Resources\TaskCommentResource;
 use App\Http\Resources\TaskResource;
 use App\Http\Resources\TaskUpdateResource;
+use App\Models\Area;
 use App\Models\Task;
 use App\Models\TaskAttachment;
 use App\Models\TaskComment;
@@ -41,7 +42,7 @@ class TaskController extends Controller
                     $query->where('created_by', $user->id)
                         ->orWhere('assigned_to_user_id', $user->id)
                         ->orWhere('current_responsible_user_id', $user->id)
-                        ->orWhereIn('area_id', $user->managedAreas()->pluck('id'));
+                        ->orWhereIn('area_id', Area::where('manager_user_id', $user->id)->select('id'));
                 });
             })
             ->when($request->query('status'), fn ($q, $status) =>
@@ -150,6 +151,15 @@ class TaskController extends Controller
         $task = $service->reject($task, $request->user(), $request->note);
 
         return new TaskResource($task->load(['currentResponsible', 'area', 'latestUpdate']));
+    }
+
+    public function destroy(Task $task): JsonResponse
+    {
+        $this->authorize('delete', $task);
+
+        $task->forceDelete();
+
+        return response()->json(['message' => 'Tarea eliminada correctamente.']);
     }
 
     public function cancel(Task $task, TaskStatusService $service): TaskResource

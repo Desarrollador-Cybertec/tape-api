@@ -15,6 +15,7 @@ class UserResource extends JsonResource
             'email' => $this->email,
             'role' => new RoleResource($this->whenLoaded('role')),
             'active' => $this->active,
+            'area_id' => $this->whenLoaded('activeAreas', fn () => $this->activeAreas->first()?->id),
             'areas' => AreaResource::collection($this->whenLoaded('activeAreas')),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

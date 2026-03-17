@@ -31,12 +31,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('areas', AreaController::class)->except(['destroy']);
     Route::patch('/areas/{area}/manager', [AreaController::class, 'assignManager']);
     Route::post('/areas/claim-worker', [AreaController::class, 'claimWorker']);
+    Route::get('/areas/{area}/available-workers', [AreaController::class, 'availableWorkers']);
 
     // Meetings
     Route::apiResource('meetings', MeetingController::class);
 
     // Tasks
-    Route::apiResource('tasks', TaskController::class)->except(['destroy']);
+    Route::apiResource('tasks', TaskController::class);
     Route::post('/tasks/{task}/delegate', [TaskController::class, 'delegate']);
     Route::post('/tasks/{task}/start', [TaskController::class, 'start']);
     Route::post('/tasks/{task}/submit-review', [TaskController::class, 'submitForReview']);

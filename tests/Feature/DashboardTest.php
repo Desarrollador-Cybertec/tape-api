@@ -89,7 +89,8 @@ class DashboardTest extends TestCase
                 'total_completed',
                 'total_all',
                 'completion_rate',
-                'top_responsibles',
+                'global_progress',
+                'pending_by_user',
             ]);
 
         $this->assertEquals(2, $response->json('total_all'));

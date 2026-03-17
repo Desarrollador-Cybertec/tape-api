@@ -25,12 +25,14 @@ class DashboardController extends Controller
         $stats = Task::toBase()->selectRaw("
             COUNT(*) as total_all,
             SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as total_completed,
+            SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as total_cancelled,
             SUM(CASE WHEN status NOT IN (?, ?) THEN 1 ELSE 0 END) as total_active,
             SUM(CASE WHEN due_date < CURRENT_DATE AND status NOT IN (?, ?) THEN 1 ELSE 0 END) as overdue_tasks,
             SUM(CASE WHEN due_date >= CURRENT_DATE AND due_date <= ? AND status NOT IN (?, ?) THEN 1 ELSE 0 END) as due_soon,
             SUM(CASE WHEN status = ? AND completed_at >= ? THEN 1 ELSE 0 END) as completed_this_month
         ", [
             $completed,
+            $cancelled,
             $completed, $cancelled,
             $completed, $cancelled,
             now()->addDays(3)->toDateString(), $completed, $cancelled,
@@ -55,18 +57,18 @@ class DashboardController extends Controller
 
         $totalAll = (int) $stats->total_all;
         $totalCompleted = (int) $stats->total_completed;
+        $totalActive = (int) $stats->total_active;
         $completionRate = $totalAll > 0 ? round(($totalCompleted / $totalAll) * 100, 1) : 0;
 
-        $completedTasks = Task::where('status', $completed)
-            ->whereNotNull('completed_at')
-            ->get(['created_at', 'completed_at']);
+        // Global progress: completed / (total - cancelled)
+        $totalCancelled = (int) $stats->total_cancelled;
+        $totalExcludingCancelled = $totalAll - $totalCancelled;
+        $globalProgress = $totalExcludingCancelled > 0
+            ? round(($totalCompleted / $totalExcludingCancelled) * 100, 1)
+            : 0;
 
-        $avgCloseDays = $completedTasks->isNotEmpty()
-            ? round($completedTasks->avg(fn ($t) => $t->created_at->diffInDays($t->completed_at)), 1)
-            : null;
-
-        // JOIN to resolve user names in one query (eliminates N+1)
-        $topResponsibles = Task::select('tasks.current_responsible_user_id', 'users.name as user_name', DB::raw('count(*) as total'))
+        // Personas con tareas pendientes (ordered by most pending)
+        $pendingByUser = Task::select('tasks.current_responsible_user_id', 'users.name as user_name', DB::raw('count(*) as total'))
             ->join('users', 'tasks.current_responsible_user_id', '=', 'users.id')
             ->whereNotIn('tasks.status', [$completed, $cancelled])
             ->groupBy('tasks.current_responsible_user_id', 'users.name')
@@ -76,7 +78,7 @@ class DashboardController extends Controller
             ->map(fn ($item) => [
                 'user_id' => $item->current_responsible_user_id,
                 'user_name' => $item->user_name,
-                'active_tasks' => $item->total,
+                'pending_tasks' => $item->total,
             ]);
 
         return response()->json([
@@ -85,12 +87,12 @@ class DashboardController extends Controller
             'overdue_tasks' => (int) $stats->overdue_tasks,
             'due_soon' => (int) $stats->due_soon,
             'completed_this_month' => (int) $stats->completed_this_month,
-            'total_active' => (int) $stats->total_active,
+            'total_active' => $totalActive,
             'total_completed' => $totalCompleted,
             'total_all' => $totalAll,
             'completion_rate' => $completionRate,
-            'avg_close_days' => $avgCloseDays,
-            'top_responsibles' => $topResponsibles,
+            'global_progress' => $globalProgress,
+            'pending_by_user' => $pendingByUser,
         ]);
     }
 
@@ -105,12 +107,13 @@ class DashboardController extends Controller
         $completed = TaskStatusEnum::COMPLETED->value;
         $cancelled = TaskStatusEnum::CANCELLED->value;
 
-        // Single query for total + completed + overdue (replaces 3 separate queries)
+        // Single query for total + completed + overdue + without_progress
         $stats = Task::where('area_id', $area->id)->toBase()->selectRaw("
             COUNT(*) as total,
             SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed,
-            SUM(CASE WHEN due_date < CURRENT_DATE AND status NOT IN (?, ?) THEN 1 ELSE 0 END) as overdue
-        ", [$completed, $completed, $cancelled])->first();
+            SUM(CASE WHEN due_date < CURRENT_DATE AND status NOT IN (?, ?) THEN 1 ELSE 0 END) as overdue,
+            SUM(CASE WHEN status NOT IN (?, ?) AND NOT EXISTS (SELECT 1 FROM task_updates WHERE task_updates.task_id = tasks.id) THEN 1 ELSE 0 END) as without_progress
+        ", [$completed, $completed, $cancelled, $completed, $cancelled])->first();
 
         $byStatus = Task::where('area_id', $area->id)
             ->select('status', DB::raw('count(*) as total'))
@@ -134,11 +137,6 @@ class DashboardController extends Controller
         $completedCount = (int) $stats->completed;
         $completionRate = $total > 0 ? round(($completedCount / $total) * 100, 1) : 0;
 
-        $withoutProgress = Task::where('area_id', $area->id)
-            ->whereNotIn('status', [$completed, $cancelled])
-            ->whereDoesntHave('updates')
-            ->count();
-
         return response()->json([
             'area' => ['id' => $area->id, 'name' => $area->name],
             'tasks_by_status' => $byStatus,
@@ -147,7 +145,7 @@ class DashboardController extends Controller
             'total_tasks' => $total,
             'completed_tasks' => $completedCount,
             'completion_rate' => $completionRate,
-            'without_progress' => $withoutProgress,
+            'without_progress' => (int) $stats->without_progress,
         ]);
     }
 

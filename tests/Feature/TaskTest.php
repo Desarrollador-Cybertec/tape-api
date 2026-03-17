@@ -517,4 +517,59 @@ class TaskTest extends TestCase
             'to_user_id' => $this->worker->id,
         ]);
     }
+
+    // ── Delete ──
+
+    public function test_superadmin_can_delete_task(): void
+    {
+        $task = Task::create([
+            'title' => 'Tarea a eliminar',
+            'created_by' => $this->admin->id,
+            'status' => TaskStatusEnum::PENDING,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->deleteJson("/api/tasks/{$task->id}")
+            ->assertOk()
+            ->assertJsonFragment(['message' => 'Tarea eliminada correctamente.']);
+
+        $this->assertDatabaseMissing('tasks', ['id' => $task->id]);
+    }
+
+    public function test_worker_cannot_delete_task(): void
+    {
+        $task = Task::create([
+            'title' => 'Tarea protegida',
+            'created_by' => $this->admin->id,
+            'status' => TaskStatusEnum::PENDING,
+        ]);
+
+        $this->actingAs($this->worker)
+            ->deleteJson("/api/tasks/{$task->id}")
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('tasks', ['id' => $task->id]);
+    }
+
+    public function test_delete_cascades_related_records(): void
+    {
+        $task = Task::create([
+            'title' => 'Tarea con comentario',
+            'created_by' => $this->admin->id,
+            'status' => TaskStatusEnum::PENDING,
+        ]);
+
+        TaskComment::create([
+            'task_id' => $task->id,
+            'user_id' => $this->admin->id,
+            'comment' => 'Un comentario',
+            'type' => 'comment',
+        ]);
+
+        $this->actingAs($this->admin)
+            ->deleteJson("/api/tasks/{$task->id}")
+            ->assertOk();
+
+        $this->assertDatabaseMissing('task_comments', ['task_id' => $task->id]);
+    }
 }

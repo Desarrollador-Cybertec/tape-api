@@ -28,7 +28,7 @@ class SendDailyTaskSummary extends Command
                 TaskStatusEnum::CANCELLED->value,
             ])
             ->whereNotNull('current_responsible_user_id')
-            ->with('currentResponsible')
+            ->with(['currentResponsible', 'updates'])
             ->get()
             ->groupBy('current_responsible_user_id');
 
@@ -36,7 +36,7 @@ class SendDailyTaskSummary extends Command
         $alertDays = SystemSetting::getValue('alert_days_before_due', 3);
 
         foreach ($activeTasks as $userId => $tasks) {
-            $user = User::find($userId);
+            $user = $tasks->first()->currentResponsible;
             if (!$user) {
                 continue;
             }
@@ -83,7 +83,7 @@ class SendDailyTaskSummary extends Command
             $lines[] = "Próximas a vencer ({$alertDays} días): {$dueSoon->count()}";
         }
 
-        $withoutUpdates = $tasks->filter(fn (Task $t) => $t->updates()->count() === 0);
+        $withoutUpdates = $tasks->filter(fn (Task $t) => $t->updates->isEmpty());
         if ($withoutUpdates->isNotEmpty()) {
             $lines[] = "Sin avance reportado: {$withoutUpdates->count()}";
         }
@@ -98,7 +98,7 @@ class SendDailyTaskSummary extends Command
             $due = $task->due_date ? $task->due_date->toDateString() : 'Sin fecha';
             $ageDays = (int) $task->created_at->diffInDays(now());
 
-            $lastUpdate = $task->updates()->latest()->first();
+            $lastUpdate = $task->updates->sortByDesc('created_at')->first();
             $daysSinceUpdate = $lastUpdate
                 ? (int) $lastUpdate->created_at->diffInDays(now())
                 : $ageDays;

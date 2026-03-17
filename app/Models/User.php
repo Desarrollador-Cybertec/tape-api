@@ -110,13 +110,17 @@ class User extends Authenticatable
 
     public function belongsToArea(int $areaId): bool
     {
+        if ($this->relationLoaded('activeAreas')) {
+            return $this->activeAreas->contains('id', $areaId);
+        }
         return $this->activeAreas()->where('areas.id', $areaId)->exists();
     }
 
     public function isManagerOfArea(int $areaId): bool
     {
-        return Area::where('id', $areaId)
-            ->where('manager_user_id', $this->id)
-            ->exists();
+        if ($this->relationLoaded('managedAreas')) {
+            return $this->managedAreas->contains('id', $areaId);
+        }
+        return $this->managedAreas()->where('id', $areaId)->exists();
     }
 }
