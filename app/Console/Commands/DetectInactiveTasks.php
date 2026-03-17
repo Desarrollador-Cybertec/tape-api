@@ -56,7 +56,9 @@ class DetectInactiveTasks extends Command
                     ? (int) $lastUpdate->created_at->diffInDays(now())
                     : (int) $task->created_at->diffInDays(now());
 
-                $due = $task->due_date ? $task->due_date->toDateString() : 'Sin fecha';
+                /** @var \Illuminate\Support\Carbon|null $dueDate */
+                $dueDate = $task->due_date;
+                $due = $dueDate ? $dueDate->toDateString() : 'Sin fecha';
                 $lines[] = "- {$task->title} ({$daysSince} días sin avance, Vence: {$due})";
             }
 

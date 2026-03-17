@@ -8,7 +8,41 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property int $id
+ * @property string $title
+ * @property string|null $description
+ * @property TaskStatusEnum $status
+ * @property TaskPriorityEnum $priority
+ * @property Carbon|null $start_date
+ * @property Carbon|null $due_date
+ * @property Carbon|null $completed_at
+ * @property Carbon|null $completion_notified_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property int|null $created_by
+ * @property int|null $assigned_by
+ * @property int|null $assigned_to_user_id
+ * @property int|null $assigned_to_area_id
+ * @property int|null $delegated_by
+ * @property int|null $current_responsible_user_id
+ * @property int|null $area_id
+ * @property int|null $closed_by
+ * @property int|null $cancelled_by
+ * @property int|null $meeting_id
+ * @property int $progress_percent
+ * @property bool $requires_attachment
+ * @property bool $requires_completion_comment
+ * @property bool $requires_manager_approval
+ * @property bool $requires_completion_notification
+ * @property bool $requires_due_date
+ * @property bool $requires_progress_report
+ * @property bool $notify_on_due
+ * @property bool $notify_on_overdue
+ * @property bool $notify_on_completion
+ */
 class Task extends Model
 {
     use SoftDeletes;

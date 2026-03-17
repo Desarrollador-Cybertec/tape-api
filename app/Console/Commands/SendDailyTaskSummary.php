@@ -42,11 +42,13 @@ class SendDailyTaskSummary extends Command
             }
 
             $overdue = $tasks->filter(fn (Task $t) => $t->isOverdue());
-            $dueSoon = $tasks->filter(fn (Task $t) =>
-                $t->due_date !== null
-                && $t->due_date->isFuture()
-                && $t->due_date->diffInDays(now()) <= $alertDays
-            );
+            $dueSoon = $tasks->filter(function (Task $t) use ($alertDays) {
+                /** @var \Illuminate\Support\Carbon|null $dueDate */
+                $dueDate = $t->due_date;
+                return $dueDate !== null
+                    && $dueDate->isFuture()
+                    && $dueDate->diffInDays(now()) <= $alertDays;
+            });
 
             $message = $this->buildSummaryMessage($user, $tasks, $overdue, $dueSoon, $alertDays);
 

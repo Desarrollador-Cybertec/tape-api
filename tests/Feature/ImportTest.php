@@ -216,6 +216,7 @@ class ImportTest extends TestCase
         $response->assertOk();
         $this->assertEquals(2, $response->json('imported'));
 
+        /** @var Task $task1 */
         $task1 = Task::where('title', 'Tarea 1')->first();
         $this->assertEquals('2025-03-15', $task1->start_date->toDateString());
 

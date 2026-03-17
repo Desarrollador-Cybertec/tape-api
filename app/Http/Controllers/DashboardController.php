@@ -193,7 +193,7 @@ class DashboardController extends Controller
             ->orderBy('due_date')
             ->limit(10)
             ->get()
-            ->map(fn ($task) => [
+            ->map(fn (Task $task) => [
                 'id' => $task->id,
                 'title' => $task->title,
                 'status' => $task->status,

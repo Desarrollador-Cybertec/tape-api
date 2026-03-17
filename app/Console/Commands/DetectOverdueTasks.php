@@ -32,6 +32,7 @@ class DetectOverdueTasks extends Command
 
         $count = 0;
 
+        /** @var Task $task */
         foreach ($tasks as $task) {
             $oldStatus = $task->status;
 
