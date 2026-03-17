@@ -16,7 +16,7 @@ class AreaResource extends JsonResource
             'manager' => new UserResource($this->whenLoaded('manager')),
             'active' => $this->active,
             'members_count' => $this->whenCounted('activeMembers'),
-            'members' => UserResource::collection($this->whenLoaded('activeMembers')),
+            'members' => AreaMemberResource::collection($this->whenLoaded('activeMembers')),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

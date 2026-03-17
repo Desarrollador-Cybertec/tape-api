@@ -7,6 +7,7 @@ use App\Enums\TaskStatusEnum;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 
@@ -175,6 +176,11 @@ class Task extends Model
     public function updates(): HasMany
     {
         return $this->hasMany(TaskUpdate::class);
+    }
+
+    public function latestUpdate(): HasOne
+    {
+        return $this->hasOne(TaskUpdate::class)->latestOfMany();
     }
 
     public function meeting(): BelongsTo

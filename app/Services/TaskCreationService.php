@@ -16,6 +16,15 @@ class TaskCreationService
         return DB::transaction(function () use ($data, $creator) {
             $isAreaAssignment = !empty($data['assigned_to_area_id']) && empty($data['assigned_to_user_id']);
 
+            // Resolve area_id: use explicit area, or derive from the assigned user's active area
+            $areaId = $data['assigned_to_area_id'] ?? null;
+            if (!$areaId && !empty($data['assigned_to_user_id'])) {
+                $areaId = DB::table('area_members')
+                    ->where('user_id', $data['assigned_to_user_id'])
+                    ->where('is_active', true)
+                    ->value('area_id');
+            }
+
             $task = Task::create([
                 'title' => $data['title'],
                 'description' => $data['description'] ?? null,
@@ -23,7 +32,7 @@ class TaskCreationService
                 'assigned_by' => $creator->id,
                 'assigned_to_user_id' => $data['assigned_to_user_id'] ?? null,
                 'assigned_to_area_id' => $data['assigned_to_area_id'] ?? null,
-                'area_id' => $data['assigned_to_area_id'] ?? null,
+                'area_id' => $areaId,
                 'current_responsible_user_id' => $data['assigned_to_user_id'] ?? null,
                 'priority' => $data['priority'] ?? 'medium',
                 'status' => $isAreaAssignment

@@ -34,7 +34,7 @@ class TaskController extends Controller
     {
         $user = $request->user();
 
-        $tasks = Task::with(['creator', 'currentResponsible', 'area'])
+        $tasks = Task::with(['creator', 'currentResponsible', 'area', 'latestUpdate'])
             ->withCount(['comments', 'attachments'])
             ->when(!$user->isSuperAdmin(), function ($q) use ($user) {
                 $q->where(function ($query) use ($user) {
@@ -71,7 +71,7 @@ class TaskController extends Controller
         $task = $service->create($request->validated(), $request->user());
 
         return response()->json(
-            new TaskResource($task->load(['creator', 'assignedUser', 'assignedArea', 'area'])),
+            new TaskResource($task->load(['creator', 'assignedUser', 'assignedArea', 'area', 'latestUpdate'])),
             201
         );
     }
@@ -96,6 +96,7 @@ class TaskController extends Controller
                 'delegations.toUser',
                 'statusHistory.changedByUser',
                 'updates.user',
+                'latestUpdate',
             ])->loadCount(['comments', 'attachments', 'updates'])
         );
     }
@@ -104,7 +105,7 @@ class TaskController extends Controller
     {
         $task->update($request->validated());
 
-        return new TaskResource($task->fresh(['creator', 'currentResponsible', 'area']));
+        return new TaskResource($task->fresh(['creator', 'currentResponsible', 'area', 'latestUpdate']));
     }
 
     public function delegate(DelegateTaskRequest $request, Task $task, TaskDelegationService $service): TaskResource
@@ -116,7 +117,7 @@ class TaskController extends Controller
             $request->note
         );
 
-        return new TaskResource($task->load(['currentResponsible', 'delegator', 'area']));
+        return new TaskResource($task->load(['currentResponsible', 'delegator', 'area', 'latestUpdate']));
     }
 
     public function start(Task $task, TaskStatusService $service): TaskResource
@@ -125,7 +126,7 @@ class TaskController extends Controller
 
         $task = $service->start($task, request()->user());
 
-        return new TaskResource($task->load(['currentResponsible', 'area']));
+        return new TaskResource($task->load(['currentResponsible', 'area', 'latestUpdate']));
     }
 
     public function submitForReview(Task $task, TaskCompletionService $service): TaskResource
@@ -134,21 +135,21 @@ class TaskController extends Controller
 
         $task = $service->submitForReview($task, request()->user());
 
-        return new TaskResource($task->load(['currentResponsible', 'area']));
+        return new TaskResource($task->load(['currentResponsible', 'area', 'latestUpdate']));
     }
 
     public function approve(ApproveTaskRequest $request, Task $task, TaskCompletionService $service): TaskResource
     {
         $task = $service->approve($task, $request->user(), $request->note);
 
-        return new TaskResource($task->load(['currentResponsible', 'area']));
+        return new TaskResource($task->load(['currentResponsible', 'area', 'latestUpdate']));
     }
 
     public function reject(RejectTaskRequest $request, Task $task, TaskCompletionService $service): TaskResource
     {
         $task = $service->reject($task, $request->user(), $request->note);
 
-        return new TaskResource($task->load(['currentResponsible', 'area']));
+        return new TaskResource($task->load(['currentResponsible', 'area', 'latestUpdate']));
     }
 
     public function cancel(Task $task, TaskStatusService $service): TaskResource
@@ -157,7 +158,7 @@ class TaskController extends Controller
 
         $task = $service->cancel($task, request()->user());
 
-        return new TaskResource($task->load(['currentResponsible', 'area']));
+        return new TaskResource($task->load(['currentResponsible', 'area', 'latestUpdate']));
     }
 
     public function comment(StoreTaskCommentRequest $request, Task $task): JsonResponse

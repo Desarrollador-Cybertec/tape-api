@@ -97,6 +97,9 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'laravel',
             'sslmode' => 'prefer',
+            'options' => [
+                \PDO::ATTR_PERSISTENT => true,
+            ],
         ],
 
         'sqlsrv' => [

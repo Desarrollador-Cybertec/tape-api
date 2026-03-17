@@ -9,7 +9,7 @@ class TaskResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $lastUpdate = $this->updates()->latest()->first();
+        $lastUpdate = $this->relationLoaded('latestUpdate') ? $this->latestUpdate : null;
         $ageDays = (int) $this->created_at->diffInDays(now());
         $daysSinceUpdate = $lastUpdate
             ? (int) $lastUpdate->created_at->diffInDays(now())
