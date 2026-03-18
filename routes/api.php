@@ -32,6 +32,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/areas/{area}/manager', [AreaController::class, 'assignManager']);
     Route::post('/areas/claim-worker', [AreaController::class, 'claimWorker']);
     Route::get('/areas/{area}/available-workers', [AreaController::class, 'availableWorkers']);
+    Route::get('/areas/{area}/members', [AreaController::class, 'members']);
 
     // Meetings
     Route::apiResource('meetings', MeetingController::class);

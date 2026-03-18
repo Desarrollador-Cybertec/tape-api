@@ -188,7 +188,7 @@ class AreaTest extends TestCase
         $this->assertNotContains($inArea->id, $ids->toArray());
     }
 
-    public function test_available_workers_does_not_exclude_workers_from_other_areas(): void
+    public function test_available_workers_does_not_show_workers_from_other_areas(): void
     {
         $manager = $this->createUser(RoleEnum::AREA_MANAGER);
         $area1 = Area::create(['name' => 'Área 1', 'manager_user_id' => $manager->id]);
@@ -204,13 +204,14 @@ class AreaTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Worker is in area2, but should still appear as available for area1
+        // Worker is in area2 (active), so should NOT appear as available for area1
+        // because a worker can only belong to one active area at a time
         $response = $this->actingAs($manager, 'sanctum')
             ->getJson("/api/areas/{$area1->id}/available-workers");
 
         $response->assertOk();
         $ids = collect($response->json('data'))->pluck('id');
-        $this->assertContains($workerInArea2->id, $ids->toArray());
+        $this->assertNotContains($workerInArea2->id, $ids->toArray());
     }
 
     public function test_worker_cannot_list_available_workers(): void
@@ -238,5 +239,57 @@ class AreaTest extends TestCase
         $ids = collect($response->json('data'))->pluck('id');
         $this->assertContains($matching->id, $ids->toArray());
         $this->assertNotContains($notMatching->id, $ids->toArray());
+    }
+
+    public function test_manager_can_list_area_members(): void
+    {
+        $manager = $this->createUser(RoleEnum::AREA_MANAGER);
+        $area = Area::create(['name' => 'Área Test', 'manager_user_id' => $manager->id]);
+
+        $worker1 = $this->createUser(RoleEnum::WORKER);
+        $worker2 = $this->createUser(RoleEnum::WORKER);
+        $outsider = $this->createUser(RoleEnum::WORKER);
+
+        AreaMember::create(['area_id' => $area->id, 'user_id' => $worker1->id, 'assigned_by' => $manager->id, 'joined_at' => now(), 'is_active' => true]);
+        AreaMember::create(['area_id' => $area->id, 'user_id' => $worker2->id, 'assigned_by' => $manager->id, 'joined_at' => now(), 'is_active' => true]);
+
+        $response = $this->actingAs($manager, 'sanctum')
+            ->getJson("/api/areas/{$area->id}/members");
+
+        $response->assertOk();
+        $ids = collect($response->json('data'))->pluck('id');
+        $this->assertContains($worker1->id, $ids->toArray());
+        $this->assertContains($worker2->id, $ids->toArray());
+        $this->assertNotContains($outsider->id, $ids->toArray());
+    }
+
+    public function test_members_excludes_inactive_memberships(): void
+    {
+        $manager = $this->createUser(RoleEnum::AREA_MANAGER);
+        $area = Area::create(['name' => 'Área Test', 'manager_user_id' => $manager->id]);
+
+        $active = $this->createUser(RoleEnum::WORKER);
+        $inactive = $this->createUser(RoleEnum::WORKER);
+
+        AreaMember::create(['area_id' => $area->id, 'user_id' => $active->id, 'assigned_by' => $manager->id, 'joined_at' => now(), 'is_active' => true]);
+        AreaMember::create(['area_id' => $area->id, 'user_id' => $inactive->id, 'assigned_by' => $manager->id, 'joined_at' => now(), 'is_active' => false]);
+
+        $response = $this->actingAs($manager, 'sanctum')
+            ->getJson("/api/areas/{$area->id}/members");
+
+        $response->assertOk();
+        $ids = collect($response->json('data'))->pluck('id');
+        $this->assertContains($active->id, $ids->toArray());
+        $this->assertNotContains($inactive->id, $ids->toArray());
+    }
+
+    public function test_worker_cannot_list_area_members(): void
+    {
+        $worker = $this->createUser(RoleEnum::WORKER);
+        $area = Area::create(['name' => 'Área Test']);
+
+        $this->actingAs($worker, 'sanctum')
+            ->getJson("/api/areas/{$area->id}/members")
+            ->assertForbidden();
     }
 }

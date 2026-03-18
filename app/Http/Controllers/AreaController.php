@@ -100,7 +100,25 @@ class AreaController extends Controller
         $users = User::with('role')
             ->whereHas('role', fn ($q) => $q->where('slug', 'worker'))
             ->where('active', true)
-            ->whereDoesntHave('activeAreas', fn ($q) => $q->where('areas.id', $area->id))
+            ->whereDoesntHave('activeAreas')
+            ->when($request->query('search'), fn ($q, $search) =>
+                $q->where(function ($sq) use ($search) {
+                    $sq->where('name', 'like', "%{$search}%")
+                       ->orWhere('email', 'like', "%{$search}%");
+                })
+            )
+            ->orderBy('name')
+            ->paginate(20);
+
+        return UserResource::collection($users);
+    }
+
+    public function members(Request $request, Area $area): AnonymousResourceCollection
+    {
+        $this->authorize('view', $area);
+
+        $users = User::with('role')
+            ->whereHas('activeAreas', fn ($q) => $q->where('areas.id', $area->id))
             ->when($request->query('search'), fn ($q, $search) =>
                 $q->where(function ($sq) use ($search) {
                     $sq->where('name', 'like', "%{$search}%")
