@@ -23,6 +23,8 @@ class TaskResource extends JsonResource
             'assigner' => new UserResource($this->whenLoaded('assigner')),
             'assigned_user' => new UserResource($this->whenLoaded('assignedUser')),
             'assigned_area' => new AreaResource($this->whenLoaded('assignedArea')),
+            'external_email' => $this->external_email,
+            'external_name' => $this->external_name,
             'delegator' => new UserResource($this->whenLoaded('delegator')),
             'current_responsible' => new UserResource($this->whenLoaded('currentResponsible')),
             'area' => new AreaResource($this->whenLoaded('area')),

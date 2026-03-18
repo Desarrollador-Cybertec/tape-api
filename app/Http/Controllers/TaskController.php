@@ -41,8 +41,18 @@ class TaskController extends Controller
                 $q->where(function ($query) use ($user) {
                     $query->where('created_by', $user->id)
                         ->orWhere('assigned_to_user_id', $user->id)
-                        ->orWhere('current_responsible_user_id', $user->id)
-                        ->orWhereIn('area_id', Area::where('manager_user_id', $user->id)->select('id'));
+                        ->orWhere('current_responsible_user_id', $user->id);
+
+                    if ($user->isAreaManager()) {
+                        $workerIds = \App\Models\User::whereHas('role', fn ($r) =>
+                            $r->where('slug', \App\Enums\RoleEnum::WORKER->value)
+                        )->select('id');
+
+                        $query->orWhere(function ($q) use ($user, $workerIds) {
+                            $q->whereIn('area_id', Area::where('manager_user_id', $user->id)->select('id'))
+                              ->whereNotIn('created_by', $workerIds);
+                        });
+                    }
                 });
             })
             ->when($request->query('status'), fn ($q, $status) =>

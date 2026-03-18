@@ -13,6 +13,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -92,15 +93,140 @@ class TaskTest extends TestCase
             ->assertJsonPath('status', TaskStatusEnum::PENDING_ASSIGNMENT->value);
     }
 
-    public function test_worker_cannot_create_task(): void
+    public function test_worker_can_create_task_for_self(): void
     {
         $response = $this->actingAs($this->worker, 'sanctum')
             ->postJson('/api/tasks', [
-                'title' => 'Tarea ilegal',
+                'title' => 'Mi propia tarea',
                 'assigned_to_user_id' => $this->worker->id,
             ]);
 
-        $response->assertForbidden();
+        $response->assertCreated()
+            ->assertJsonPath('title', 'Mi propia tarea')
+            ->assertJsonPath('status', TaskStatusEnum::PENDING->value);
+    }
+
+    public function test_worker_cannot_assign_task_to_other_user(): void
+    {
+        $otherWorker = User::factory()->create(['role_id' => $this->roles['worker']->id]);
+
+        $response = $this->actingAs($this->worker, 'sanctum')
+            ->postJson('/api/tasks', [
+                'title' => 'Tarea para otro',
+                'assigned_to_user_id' => $otherWorker->id,
+            ]);
+
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors(['assigned_to_user_id']);
+    }
+
+    public function test_worker_cannot_assign_task_to_area(): void
+    {
+        $response = $this->actingAs($this->worker, 'sanctum')
+            ->postJson('/api/tasks', [
+                'title' => 'Tarea de área',
+                'assigned_to_area_id' => $this->area->id,
+            ]);
+
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors(['assigned_to_area_id']);
+    }
+
+    public function test_worker_can_create_task_with_external_email(): void
+    {
+        Mail::fake();
+
+        $response = $this->actingAs($this->worker, 'sanctum')
+            ->postJson('/api/tasks', [
+                'title' => 'Tarea externa',
+                'description' => 'Para proveedor',
+                'external_email' => 'proveedor@example.com',
+                'external_name' => 'Juan Proveedor',
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('title', 'Tarea externa');
+
+        $this->assertDatabaseHas('tasks', [
+            'external_email' => 'proveedor@example.com',
+            'external_name' => 'Juan Proveedor',
+        ]);
+
+        Mail::assertQueued(\App\Mail\ExternalTaskMail::class, function ($mail) {
+            return $mail->hasTo('proveedor@example.com');
+        });
+    }
+
+    public function test_manager_can_create_task_for_area_worker(): void
+    {
+        $response = $this->actingAs($this->manager, 'sanctum')
+            ->postJson('/api/tasks', [
+                'title' => 'Tarea para trabajador',
+                'assigned_to_user_id' => $this->worker->id,
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('status', TaskStatusEnum::PENDING->value);
+    }
+
+    public function test_manager_can_create_task_for_other_area(): void
+    {
+        $otherArea = Area::create([
+            'name' => 'Otra Área',
+            'manager_user_id' => User::factory()->create(['role_id' => $this->roles['area_manager']->id])->id,
+        ]);
+
+        $response = $this->actingAs($this->manager, 'sanctum')
+            ->postJson('/api/tasks', [
+                'title' => 'Requerimiento inter-área',
+                'assigned_to_area_id' => $otherArea->id,
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('status', TaskStatusEnum::PENDING_ASSIGNMENT->value);
+    }
+
+    public function test_manager_cannot_assign_to_worker_outside_their_area(): void
+    {
+        $outsideWorker = User::factory()->create(['role_id' => $this->roles['worker']->id]);
+
+        $response = $this->actingAs($this->manager, 'sanctum')
+            ->postJson('/api/tasks', [
+                'title' => 'Tarea fuera de área',
+                'assigned_to_user_id' => $outsideWorker->id,
+            ]);
+
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors(['assigned_to_user_id']);
+    }
+
+    public function test_manager_can_create_task_with_external_email(): void
+    {
+        Mail::fake();
+
+        $response = $this->actingAs($this->manager, 'sanctum')
+            ->postJson('/api/tasks', [
+                'title' => 'Tarea para externo',
+                'external_email' => 'externo@example.com',
+            ]);
+
+        $response->assertCreated();
+
+        Mail::assertQueued(\App\Mail\ExternalTaskMail::class, function ($mail) {
+            return $mail->hasTo('externo@example.com');
+        });
+    }
+
+    public function test_cannot_combine_assignment_targets(): void
+    {
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/tasks', [
+                'title' => 'Doble asignación',
+                'assigned_to_user_id' => $this->worker->id,
+                'assigned_to_area_id' => $this->area->id,
+            ]);
+
+        $response->assertUnprocessable();
     }
 
     public function test_task_requires_title(): void
@@ -114,7 +240,7 @@ class TaskTest extends TestCase
             ->assertJsonValidationErrors(['title']);
     }
 
-    public function test_task_requires_assignee_or_area(): void
+    public function test_task_requires_assignee_or_area_or_external(): void
     {
         $response = $this->actingAs($this->admin, 'sanctum')
             ->postJson('/api/tasks', [
@@ -449,6 +575,75 @@ class TaskTest extends TestCase
 
         $response->assertOk()
             ->assertJsonCount(1, 'data');
+    }
+
+    public function test_manager_sees_area_tasks_assigned_by_admin(): void
+    {
+        // Task created by admin for the area → manager should see it
+        Task::create([
+            'title' => 'Tarea de admin para área',
+            'created_by' => $this->admin->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::PENDING,
+        ]);
+
+        $response = $this->actingAs($this->manager, 'sanctum')
+            ->getJson('/api/tasks');
+
+        $response->assertOk();
+        $ids = collect($response->json('data'))->pluck('id');
+        $this->assertNotEmpty($ids);
+    }
+
+    public function test_manager_cannot_see_worker_self_created_tasks(): void
+    {
+        // Worker creates a task for themselves → should NOT appear for manager
+        Task::create([
+            'title' => 'Tarea personal del trabajador',
+            'created_by' => $this->worker->id,
+            'assigned_to_user_id' => $this->worker->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::PENDING,
+        ]);
+
+        $response = $this->actingAs($this->manager, 'sanctum')
+            ->getJson('/api/tasks');
+
+        $response->assertOk()
+            ->assertJsonCount(0, 'data');
+    }
+
+    public function test_manager_cannot_view_worker_self_created_task_directly(): void
+    {
+        $task = Task::create([
+            'title' => 'Tarea personal',
+            'created_by' => $this->worker->id,
+            'assigned_to_user_id' => $this->worker->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::PENDING,
+        ]);
+
+        $response = $this->actingAs($this->manager, 'sanctum')
+            ->getJson("/api/tasks/{$task->id}");
+
+        $response->assertForbidden();
+    }
+
+    public function test_manager_can_view_admin_assigned_task_directly(): void
+    {
+        $task = Task::create([
+            'title' => 'Tarea de área',
+            'created_by' => $this->admin->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::PENDING,
+        ]);
+
+        $response = $this->actingAs($this->manager, 'sanctum')
+            ->getJson("/api/tasks/{$task->id}");
+
+        $response->assertOk();
     }
 
     public function test_task_show_returns_full_details(): void

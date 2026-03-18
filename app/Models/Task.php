@@ -55,6 +55,8 @@ class Task extends Model
         'assigned_by',
         'assigned_to_user_id',
         'assigned_to_area_id',
+        'external_email',
+        'external_name',
         'delegated_by',
         'current_responsible_user_id',
         'area_id',

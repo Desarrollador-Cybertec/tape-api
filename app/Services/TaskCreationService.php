@@ -3,17 +3,20 @@
 namespace App\Services;
 
 use App\Enums\TaskStatusEnum;
+use App\Mail\ExternalTaskMail;
 use App\Models\ActivityLog;
 use App\Models\Task;
 use App\Models\TaskStatusHistory;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 
 class TaskCreationService
 {
     public function create(array $data, User $creator): Task
     {
         return DB::transaction(function () use ($data, $creator) {
+            $isExternalTask = !empty($data['external_email']);
             $isAreaAssignment = !empty($data['assigned_to_area_id']) && empty($data['assigned_to_user_id']);
 
             // Resolve area_id: use explicit area, or derive from the assigned user's active area
@@ -25,6 +28,15 @@ class TaskCreationService
                     ->value('area_id');
             }
 
+            // Determine status
+            if ($isExternalTask) {
+                $status = TaskStatusEnum::PENDING;
+            } elseif ($isAreaAssignment) {
+                $status = TaskStatusEnum::PENDING_ASSIGNMENT;
+            } else {
+                $status = TaskStatusEnum::PENDING;
+            }
+
             $task = Task::create([
                 'title' => $data['title'],
                 'description' => $data['description'] ?? null,
@@ -32,12 +44,12 @@ class TaskCreationService
                 'assigned_by' => $creator->id,
                 'assigned_to_user_id' => $data['assigned_to_user_id'] ?? null,
                 'assigned_to_area_id' => $data['assigned_to_area_id'] ?? null,
+                'external_email' => $data['external_email'] ?? null,
+                'external_name' => $data['external_name'] ?? null,
                 'area_id' => $areaId,
                 'current_responsible_user_id' => $data['assigned_to_user_id'] ?? null,
                 'priority' => $data['priority'] ?? 'medium',
-                'status' => $isAreaAssignment
-                    ? TaskStatusEnum::PENDING_ASSIGNMENT
-                    : TaskStatusEnum::PENDING,
+                'status' => $status,
                 'start_date' => $data['start_date'] ?? null,
                 'due_date' => $data['due_date'] ?? null,
                 'requires_attachment' => $data['requires_attachment'] ?? false,
@@ -68,6 +80,11 @@ class TaskCreationService
                 'subject_id' => $task->id,
                 'description' => "Tarea \"{$task->title}\" creada",
             ]);
+
+            // Send email to external recipient
+            if ($isExternalTask) {
+                Mail::to($data['external_email'])->queue(new ExternalTaskMail($task));
+            }
 
             return $task;
         });

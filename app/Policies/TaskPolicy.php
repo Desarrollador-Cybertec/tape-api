@@ -2,8 +2,10 @@
 
 namespace App\Policies;
 
+use App\Enums\RoleEnum;
 use App\Models\Task;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 class TaskPolicy
 {
@@ -25,7 +27,12 @@ class TaskPolicy
         }
 
         if ($task->area_id && $user->isManagerOfArea($task->area_id)) {
-            return true;
+            // Workers' self-created tasks are personal and not visible to area managers
+            return !DB::table('users')
+                ->join('roles', 'users.role_id', '=', 'roles.id')
+                ->where('users.id', $task->created_by)
+                ->where('roles.slug', RoleEnum::WORKER->value)
+                ->exists();
         }
 
         return false;
@@ -33,7 +40,7 @@ class TaskPolicy
 
     public function create(User $user): bool
     {
-        return $user->isSuperAdmin();
+        return true;
     }
 
     public function update(User $user, Task $task): bool
