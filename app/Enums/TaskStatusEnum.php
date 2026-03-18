@@ -41,8 +41,8 @@ enum TaskStatusEnum: string
             self::IN_PROGRESS => [self::IN_REVIEW, self::COMPLETED, self::CANCELLED, self::OVERDUE],
             self::IN_REVIEW => [self::COMPLETED, self::REJECTED, self::CANCELLED],
             self::REJECTED => [self::IN_PROGRESS, self::CANCELLED],
-            self::COMPLETED => [],
-            self::CANCELLED => [],
+            self::COMPLETED => [self::IN_PROGRESS],
+            self::CANCELLED => [self::PENDING],
             self::OVERDUE => [self::IN_PROGRESS, self::CANCELLED],
         };
     }
@@ -50,5 +50,20 @@ enum TaskStatusEnum: string
     public function canTransitionTo(self $newStatus): bool
     {
         return in_array($newStatus, $this->allowedTransitions());
+    }
+
+    public function defaultProgress(): int
+    {
+        return match ($this) {
+            self::DRAFT,
+            self::PENDING_ASSIGNMENT,
+            self::PENDING,
+            self::CANCELLED   => 0,
+            self::IN_PROGRESS,
+            self::REJECTED,
+            self::OVERDUE     => 25,
+            self::IN_REVIEW   => 75,
+            self::COMPLETED   => 100,
+        };
     }
 }

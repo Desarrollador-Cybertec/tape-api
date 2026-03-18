@@ -23,7 +23,10 @@ class TaskStatusService
         return DB::transaction(function () use ($task, $newStatus, $changedBy, $note) {
             $oldStatus = $task->status;
 
-            $updateData = ['status' => $newStatus];
+            $updateData = [
+                'status'           => $newStatus,
+                'progress_percent' => $newStatus->defaultProgress(),
+            ];
 
             if ($newStatus === TaskStatusEnum::COMPLETED) {
                 $updateData['completed_at'] = now();
@@ -66,5 +69,23 @@ class TaskStatusService
     public function cancel(Task $task, User $user): Task
     {
         return $this->transition($task, TaskStatusEnum::CANCELLED, $user, 'Tarea cancelada');
+    }
+
+    public function reopen(Task $task, User $user, ?string $note = null): Task
+    {
+        $newStatus = $task->status === TaskStatusEnum::CANCELLED
+            ? TaskStatusEnum::PENDING
+            : TaskStatusEnum::IN_PROGRESS;
+
+        return DB::transaction(function () use ($task, $newStatus, $user, $note) {
+            // Clear terminal state fields
+            $task->update([
+                'completed_at'  => null,
+                'closed_by'     => null,
+                'cancelled_by'  => null,
+            ]);
+
+            return $this->transition($task->fresh(), $newStatus, $user, $note ?? 'Tarea reabierta');
+        });
     }
 }

@@ -181,6 +181,17 @@ class TaskController extends Controller
         return new TaskResource($task->load(['currentResponsible', 'area', 'latestUpdate']));
     }
 
+    public function reopen(Request $request, Task $task, TaskStatusService $service): TaskResource
+    {
+        $this->authorize('reopen', $task);
+
+        $note = $request->input('note');
+
+        $task = $service->reopen($task, $request->user(), $note);
+
+        return new TaskResource($task->load(['currentResponsible', 'area', 'latestUpdate']));
+    }
+
     public function comment(StoreTaskCommentRequest $request, Task $task): JsonResponse
     {
         $comment = TaskComment::create([

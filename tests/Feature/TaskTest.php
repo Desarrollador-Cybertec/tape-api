@@ -455,6 +455,107 @@ class TaskTest extends TestCase
         $this->assertEquals(TaskStatusEnum::CANCELLED, $task->fresh()->status);
     }
 
+    public function test_superadmin_can_reopen_completed_task(): void
+    {
+        $task = Task::create([
+            'title' => 'Tarea completada',
+            'created_by' => $this->admin->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::COMPLETED,
+            'completed_at' => now(),
+            'closed_by' => $this->admin->id,
+            'progress_percent' => 100,
+        ]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/reopen", ['note' => 'Se requiere ajuste']);
+
+        $response->assertOk();
+        $fresh = $task->fresh();
+        $this->assertEquals(TaskStatusEnum::IN_PROGRESS, $fresh->status);
+        $this->assertEquals(25, $fresh->progress_percent);
+        $this->assertNull($fresh->completed_at);
+        $this->assertNull($fresh->closed_by);
+    }
+
+    public function test_manager_can_reopen_completed_task_in_their_area(): void
+    {
+        $task = Task::create([
+            'title' => 'Tarea de área completada',
+            'created_by' => $this->admin->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::COMPLETED,
+            'completed_at' => now(),
+            'closed_by' => $this->admin->id,
+        ]);
+
+        $response = $this->actingAs($this->manager, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/reopen");
+
+        $response->assertOk();
+        $this->assertEquals(TaskStatusEnum::IN_PROGRESS, $task->fresh()->status);
+    }
+
+    public function test_superadmin_can_reopen_cancelled_task(): void
+    {
+        $task = Task::create([
+            'title' => 'Tarea cancelada',
+            'created_by' => $this->admin->id,
+            'status' => TaskStatusEnum::CANCELLED,
+            'cancelled_by' => $this->admin->id,
+        ]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/reopen");
+
+        $response->assertOk();
+        $fresh = $task->fresh();
+        $this->assertEquals(TaskStatusEnum::PENDING, $fresh->status);
+        $this->assertNull($fresh->cancelled_by);
+    }
+
+    public function test_worker_can_reopen_their_own_task(): void
+    {
+        $task = Task::create([
+            'title' => 'Tarea propia completada',
+            'created_by' => $this->worker->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::COMPLETED,
+            'completed_at' => now(),
+            'closed_by' => $this->admin->id,
+            'progress_percent' => 100,
+        ]);
+
+        $response = $this->actingAs($this->worker, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/reopen");
+
+        $response->assertOk();
+        $fresh = $task->fresh();
+        $this->assertEquals(TaskStatusEnum::IN_PROGRESS, $fresh->status);
+        $this->assertNull($fresh->completed_at);
+    }
+
+    public function test_worker_cannot_reopen_task_they_are_not_responsible_for(): void
+    {
+        $otherWorker = User::factory()->create(['role_id' => $this->roles['worker']->id]);
+
+        $task = Task::create([
+            'title' => 'Tarea ajena completada',
+            'created_by' => $this->admin->id,
+            'current_responsible_user_id' => $otherWorker->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::COMPLETED,
+            'completed_at' => now(),
+        ]);
+
+        $response = $this->actingAs($this->worker, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/reopen");
+
+        $response->assertForbidden();
+    }
+
     // ── Requirements Validation ──
 
     public function test_cannot_submit_review_without_required_attachment(): void

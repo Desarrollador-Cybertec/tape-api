@@ -45,6 +45,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tasks/{task}/approve', [TaskController::class, 'approve']);
     Route::post('/tasks/{task}/reject', [TaskController::class, 'reject']);
     Route::post('/tasks/{task}/cancel', [TaskController::class, 'cancel']);
+    Route::post('/tasks/{task}/reopen', [TaskController::class, 'reopen']);
     Route::post('/tasks/{task}/comment', [TaskController::class, 'comment']);
     Route::post('/tasks/{task}/attachments', [TaskController::class, 'addAttachment']);
     Route::post('/tasks/{task}/updates', [TaskController::class, 'addUpdate']);

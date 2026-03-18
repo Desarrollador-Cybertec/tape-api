@@ -102,6 +102,21 @@ class TaskPolicy
         return $task->created_by === $user->id;
     }
 
+    public function reopen(User $user, Task $task): bool
+    {
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        if ($task->area_id && $user->isManagerOfArea($task->area_id)) {
+            return true;
+        }
+
+        // Workers can reopen tasks they created or are responsible for
+        return $task->created_by === $user->id
+            || $task->current_responsible_user_id === $user->id;
+    }
+
     public function delete(User $user, Task $task): bool
     {
         return $user->isSuperAdmin();
