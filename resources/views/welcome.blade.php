@@ -402,7 +402,7 @@
     <aside class="sidebar">
         <div class="sidebar-logo">
             <h1>TAPE API</h1>
-            <p>v1.0 &middot; Laravel 12 &middot; Sanctum</p>
+            <p>v1.2 &middot; Laravel 12 &middot; Sanctum</p>
         </div>
         <nav>
             <div class="sidebar-section">
@@ -462,7 +462,7 @@
                 seguimiento de avances, notificaciones automáticas consolidadas y dashboards analíticos.
             </p>
             <div class="hero-badges">
-                <span class="badge"><span class="badge-dot green"></span> 138 tests passing</span>
+                <span class="badge"><span class="badge-dot green"></span> 179 tests passing</span>
                 <span class="badge"><span class="badge-dot blue"></span> Laravel 12</span>
                 <span class="badge"><span class="badge-dot purple"></span> Sanctum Auth</span>
                 <span class="badge"><span class="badge-dot yellow"></span> PostgreSQL / Supabase</span>
@@ -693,6 +693,18 @@ Content-Type: application/json
                             <td>Reclamar trabajador al área</td>
                             <td><span class="role-badge">area_manager</span></td>
                         </tr>
+                        <tr>
+                            <td><span class="method method-get">GET</span></td>
+                            <td class="endpoint">/api/areas/{'{id}'}/available-workers</td>
+                            <td>Trabajadores disponibles (sin área activa)</td>
+                            <td><span class="role-badge">area_manager</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="method method-get">GET</span></td>
+                            <td class="endpoint">/api/areas/{'{id}'}/members</td>
+                            <td>Miembros activos del área</td>
+                            <td><span class="role-badge">superadmin</span> <span class="role-badge">area_manager</span></td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -708,6 +720,20 @@ Content-Type: application/json
     "user_id": 5
 }</code></pre>
             <p>El trabajador debe tener rol <code>worker</code> y no pertenecer a otra área activa.</p>
+
+            <h4>Body — Asignar encargado</h4>
+            <pre><code>{
+    "manager_user_id": 2
+}</code></pre>
+            <p>El usuario será asignado como encargado del área.</p>
+
+            <h4>Query params — Trabajadores disponibles</h4>
+            <pre><code>GET /api/areas/{'{id}'}/available-workers?search=juan</code></pre>
+            <p>Retorna workers activos sin área activa asignada, paginados (20 por página). El parámetro <code>search</code> filtra por nombre o email.</p>
+
+            <h4>Query params — Miembros del área</h4>
+            <pre><code>GET /api/areas/{'{id}'}/members?search=juan</code></pre>
+            <p>Retorna los miembros activos del área, paginados (20 por página). El parámetro <code>search</code> filtra por nombre o email.</p>
         </div>
 
         {{-- ═══════════════ MEETINGS ═══════════════ --}}
@@ -811,6 +837,12 @@ Content-Type: application/json
                             <td><span class="role-badge">superadmin</span> <span class="role-badge">area_manager</span></td>
                         </tr>
                         <tr>
+                            <td><span class="method method-delete">DELETE</span></td>
+                            <td class="endpoint">/api/tasks/{'{id}'}</td>
+                            <td>Eliminar tarea</td>
+                            <td><span class="role-badge">superadmin</span> <span class="role-badge">area_manager</span></td>
+                        </tr>
+                        <tr></tr>
                             <td><span class="method method-post">POST</span></td>
                             <td class="endpoint">/api/tasks/{'{id}'}/delegate</td>
                             <td>Delegar tarea a otro trabajador</td>
@@ -848,6 +880,12 @@ Content-Type: application/json
                         </tr>
                         <tr>
                             <td><span class="method method-post">POST</span></td>
+                            <td class="endpoint">/api/tasks/{'{id}'}/reopen</td>
+                            <td>Reabrir tarea completada o cancelada</td>
+                            <td><span class="role-badge">superadmin</span> <span class="role-badge">area_manager</span> Worker propio</td>
+                        </tr>
+                        <tr></tr>
+                            <td><span class="method method-post">POST</span></td>
                             <td class="endpoint">/api/tasks/{'{id}'}/comment</td>
                             <td>Agregar comentario</td>
                             <td>Según visibilidad</td>
@@ -881,6 +919,9 @@ Content-Type: application/json
                         <tr><td><code>age_days</code></td><td>integer</td><td>Días desde la creación</td></tr>
                         <tr><td><code>days_without_update</code></td><td>integer</td><td>Días desde el último reporte de avance</td></tr>
                         <tr><td><code>is_overdue</code></td><td>boolean</td><td>Si la tarea pasó su fecha límite</td></tr>
+                        <tr><td><code>comments_count</code></td><td>integer</td><td>Cantidad de comentarios</td></tr>
+                        <tr><td><code>attachments_count</code></td><td>integer</td><td>Cantidad de adjuntos</td></tr>
+                        <tr><td><code>updates_count</code></td><td>integer</td><td>Cantidad de reportes de avance</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -899,7 +940,9 @@ Content-Type: application/json
     "requires_progress_report": true,
     "notify_on_due": true,
     "notify_on_overdue": true,
-    "notify_on_completion": false
+    "notify_on_completion": false,
+    "external_email": null,
+    "external_name": null
 }</code></pre>
 
             <h4>Casos de asignación</h4>
@@ -911,6 +954,14 @@ Content-Type: application/json
                 <div class="card">
                     <div class="card-title">Asignar a área</div>
                     <p>Enviar <code>assigned_to_area_id</code>. Estado inicial: <code>pending_assignment</code>. El encargado luego delega.</p>
+                </div>
+                <div class="card">
+                    <div class="card-title">Asignar a sí mismo</div>
+                    <p>Superadmin o Area Manager envían su propio <code>id</code> en <code>assigned_to_user_id</code>. Estado: <code>pending</code>.</p>
+                </div>
+                <div class="card">
+                    <div class="card-title">Asignar a externo</div>
+                    <p>Enviar <code>external_email</code> y <code>external_name</code>. Estado: <code>pending</code>. Se envía correo al destinatario.</p>
                 </div>
             </div>
 
@@ -930,6 +981,22 @@ Content-Type: application/json
             <pre><code>{
     "rejection_note": "Falta el desglose por región, favor completar"
 }</code></pre>
+
+            <h4>Body — Reabrir tarea</h4>
+            <pre><code>{
+    "note": "Se requiere ajustar el informe con datos actualizados"
+}</code></pre>
+            <p>El campo <code>note</code> es opcional. Si la tarea estaba <code>completed</code> vuelve a <code>in_progress</code>. Si estaba <code>cancelled</code> vuelve a <code>pending</code>.</p>
+
+            <h4>Body — Asignar a externo</h4>
+            <pre><code>{
+    "title": "Enviar reporte a auditor",
+    "external_email": "auditor@externo.com",
+    "external_name": "Carlos López",
+    "priority": "high",
+    "due_date": "2026-04-15"
+}</code></pre>
+            <p>No se puede combinar <code>external_email</code> con <code>assigned_to_user_id</code> o <code>assigned_to_area_id</code>. Se envía correo automático al destinatario externo.</p>
 
             <h4>Body — Subir adjunto</h4>
             <pre><code>POST /api/tasks/{'{id}'}/attachments
@@ -1031,6 +1098,10 @@ attachment_type: evidence | support | final_delivery</code></pre>
                     <div class="card-title">Rankings</div>
                     <p>Tareas por estado, por área, top 10 responsables por carga</p>
                 </div>
+                <div class="card">
+                    <div class="card-title">Mis tareas (<code>my_tasks</code>)</div>
+                    <p>Hasta 10 tareas activas donde el superadmin es responsable (personales + de área), ordenadas por fecha límite. Incluye <code>area_id</code>, <code>is_overdue</code> y <code>progress_percent</code>.</p>
+                </div>
             </div>
 
             <h3>Dashboard por Área</h3>
@@ -1070,6 +1141,7 @@ attachment_type: evidence | support | final_delivery</code></pre>
                 <li>Config: <code>requires_attachment</code>, <code>requires_completion_comment</code>, <code>requires_manager_approval</code>, <code>requires_progress_report</code></li>
                 <li>Notificación: <code>notify_on_due</code>, <code>notify_on_overdue</code>, <code>notify_on_completion</code></li>
                 <li>Seguimiento: <code>progress_percent</code>, <code>meeting_id</code></li>
+                <li>Externo: <code>external_email</code>, <code>external_name</code> (para asignaciones a usuarios fuera del sistema)</li>
             </ul>
 
             <h3>Meeting</h3>
@@ -1158,6 +1230,12 @@ attachment_type: evidence | support | final_delivery</code></pre>
                 <span class="enum-val">review</span>
                 <span class="enum-val">other</span>
             </div>
+
+            <h4>NotificationChannelEnum</h4>
+            <div class="enum-list">
+                <span class="enum-val">database</span>
+                <span class="enum-val">mail</span>
+            </div>
         </div>
 
         {{-- ═══════════════ FLOW ═══════════════ --}}
@@ -1204,6 +1282,18 @@ attachment_type: evidence | support | final_delivery</code></pre>
                     <span class="flow-arrow">&rarr;</span>
                     <span class="flow-node node-cancelled">cancelled</span>
                 </div>
+                <div class="flow-row" style="margin-top:8px">
+                    <span class="flow-node node-completed">completed</span>
+                    <span class="flow-arrow">&rarr;</span>
+                    <span class="flow-node node-progress">in_progress</span>
+                    <span class="flow-arrow">(reopen)</span>
+                </div>
+                <div class="flow-row" style="margin-top:8px">
+                    <span class="flow-node node-cancelled">cancelled</span>
+                    <span class="flow-arrow">&rarr;</span>
+                    <span class="flow-node node-pending">pending</span>
+                    <span class="flow-arrow">(reopen)</span>
+                </div>
             </div>
 
             <h4>Tabla de transiciones</h4>
@@ -1218,6 +1308,8 @@ attachment_type: evidence | support | final_delivery</code></pre>
                         <tr><td><code>in_review</code></td><td>completed, rejected, cancelled</td></tr>
                         <tr><td><code>rejected</code></td><td>in_progress, cancelled</td></tr>
                         <tr><td><code>overdue</code></td><td>in_progress, cancelled</td></tr>
+                        <tr><td><code>completed</code></td><td>in_progress (reopen)</td></tr>
+                        <tr><td><code>cancelled</code></td><td>pending (reopen)</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1245,6 +1337,15 @@ attachment_type: evidence | support | final_delivery</code></pre>
                         Estado: <code>pending_assignment</code>
                     </p>
                 </div>
+                <div class="card">
+                    <div class="card-title">Auto-asignación (cualquier rol)</div>
+                    <p>
+                        Cualquier rol puede usar su propio <code>id</code> en <code>assigned_to_user_id</code>.<br>
+                        Estado: <code>pending</code><br>
+                        <strong>area_id:</strong> <code>null</code> — tarea personal.<br>
+                        No aparece en ningún dashboard, pero sí en <code>GET /api/tasks</code>.
+                    </p>
+                </div>
             </div>
 
             <h3>Delegación</h3>
@@ -1266,6 +1367,27 @@ attachment_type: evidence | support | final_delivery</code></pre>
                 <li>Si <code>requires_manager_approval = true</code> &rarr; pasa a <code>in_review</code> antes de <code>completed</code></li>
                 <li>Si no requiere aprobación &rarr; pasa directamente a <code>completed</code></li>
                 <li>Al rechazar &rarr; requiere <code>rejection_note</code>, estado vuelve a <code>in_progress</code></li>
+            </ul>
+
+            <h3>Reabrir tareas</h3>
+            <ul>
+                <li>Tareas <code>completed</code> vuelven a <code>in_progress</code></li>
+                <li>Tareas <code>cancelled</code> vuelven a <code>pending</code></li>
+                <li>Se limpia <code>completed_at</code>, <code>closed_by</code>, <code>cancelled_by</code></li>
+                <li>Superadmin puede reabrir cualquier tarea, manager las de su área, worker solo las propias</li>
+            </ul>
+
+            <h3>Eliminación de tareas</h3>
+            <ul>
+                <li>Solo <code>superadmin</code> y <code>area_manager</code> pueden eliminar tareas</li>
+                <li>Se eliminan en cascada comentarios, adjuntos y registros relacionados</li>
+            </ul>
+
+            <h3>Tareas externas</h3>
+            <ul>
+                <li>Se asignan vía <code>external_email</code> + <code>external_name</code></li>
+                <li>No se pueden combinar con <code>assigned_to_user_id</code> o <code>assigned_to_area_id</code></li>
+                <li>Se envía correo automático al destinatario externo con los detalles de la tarea</li>
             </ul>
 
             <h3>Reclamar trabajador</h3>
@@ -1604,6 +1726,8 @@ attachment_type: evidence | support | final_delivery</code></pre>
                         <tr><td>15</td><td><code>system_settings</code></td><td>Configuración clave-valor del sistema</td></tr>
                         <tr><td>16</td><td><code>message_templates</code></td><td>Plantillas de mensajes editables</td></tr>
                         <tr><td>17</td><td><code>areas</code> (mod)</td><td>Agrega <code>process_identifier</code> para mapeo con Excel</td></tr>
+                        <tr><td>18</td><td>Índices</td><td>Índices de rendimiento en tablas principales</td></tr>
+                        <tr><td>19</td><td><code>tasks</code> (mod)</td><td>Agrega <code>external_email</code>, <code>external_name</code> para asignaciones externas</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1612,23 +1736,23 @@ attachment_type: evidence | support | final_delivery</code></pre>
         {{-- ═══════════════ TESTS ═══════════════ --}}
         <div class="section" id="tests">
             <h2>Tests</h2>
-            <p>138 tests organizados por feature, 316 assertions — todos pasando con SQLite in-memory.</p>
+            <p>179 tests organizados por feature — todos pasando con SQLite in-memory.</p>
 
             <div class="table-wrap">
                 <table>
                     <thead><tr><th>Suite</th><th>Tests</th><th>Cobertura</th></tr></thead>
                     <tbody>
-                        <tr><td><code>AuthTest</code></td><td>5</td><td>Login, logout, perfil, credenciales inválidas, usuario inactivo</td></tr>
-                        <tr><td><code>UserTest</code></td><td>7</td><td>CRUD, cambio de rol, activar/desactivar, validaciones</td></tr>
-                        <tr><td><code>AreaTest</code></td><td>6</td><td>CRUD, asignar encargado, reclamar trabajador, validaciones</td></tr>
-                        <tr><td><code>MeetingTest</code></td><td>10</td><td>CRUD, permisos, vinculación con tareas, filtrado por área</td></tr>
-                        <tr><td><code>TaskTest</code></td><td>15</td><td>CRUD, delegación, flujo completo de estados, adjuntos, comentarios</td></tr>
+                        <tr><td><code>AuthTest</code></td><td>7</td><td>Login, logout, perfil, credenciales inválidas, usuario inactivo, campos requeridos, rutas protegidas</td></tr>
+                        <tr><td><code>UserTest</code></td><td>11</td><td>CRUD, cambio de rol, activar/desactivar, validación de password, email único, filtro exclude_area</td></tr>
+                        <tr><td><code>AreaTest</code></td><td>15</td><td>CRUD, asignar encargado, reclamar trabajador, workers disponibles, búsqueda, miembros del área</td></tr>
+                        <tr><td><code>MeetingTest</code></td><td>10</td><td>CRUD, permisos, vinculación con tareas, filtrado por área y clasificación</td></tr>
+                        <tr><td><code>TaskTest</code></td><td>47</td><td>CRUD, delegación, flujo completo de estados, adjuntos, comentarios, reabrir, eliminar, tareas externas, auto-asignación, tareas personales</td></tr>
                         <tr><td><code>TaskUpdateTest</code></td><td>6</td><td>Avances, validaciones, permisos, sincronización de progreso</td></tr>
-                        <tr><td><code>DashboardTest</code></td><td>7</td><td>Dashboard general, por área, personal, permisos, métricas</td></tr>
+                        <tr><td><code>DashboardTest</code></td><td>11</td><td>Dashboard general, por área, personal, permisos, métricas, exclusión de tareas personales, tareas propias del superadmin</td></tr>
                         <tr><td><code>ScheduledCommandsTest</code></td><td>6</td><td>Detección overdue, resumen diario, recordatorios, flags</td></tr>
                         <tr><td><code>SystemSettingTest</code></td><td>10</td><td>CRUD, agrupación, filtrado, casteo de tipos, permisos</td></tr>
                         <tr><td><code>MessageTemplateTest</code></td><td>9</td><td>CRUD, activar/desactivar, validaciones, permisos</td></tr>
-                        <tr><td><code>AutomationTest</code></td><td>11</td><td>Triggers manuales, permisos, configuración enabled/disabled</td></tr>
+                        <tr><td><code>AutomationTest</code></td><td>17</td><td>Triggers manuales, permisos, configuración enabled/disabled, validaciones</td></tr>
                         <tr><td><code>InactivityDetectionTest</code></td><td>10</td><td>Detección de inactividad, consolidación, configuración, trigger API</td></tr>
                         <tr><td><code>ConsolidatedDashboardTest</code></td><td>7</td><td>Dashboard consolidado, proceso/área, permisos, múltiples áreas</td></tr>
                         <tr><td><code>ImportTest</code></td><td>11</td><td>Importación CSV, áreas automáticas, mapeo estados/fechas, permisos</td></tr>

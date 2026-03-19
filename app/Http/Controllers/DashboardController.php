@@ -21,8 +21,9 @@ class DashboardController extends Controller
         $completed = TaskStatusEnum::COMPLETED->value;
         $cancelled = TaskStatusEnum::CANCELLED->value;
 
+        // Personal tasks (area_id IS NULL) are excluded from all dashboard metrics.
         // Single query for all aggregate counts (replaces 6 separate COUNT queries)
-        $stats = Task::toBase()->selectRaw("
+        $stats = Task::whereNotNull('area_id')->toBase()->selectRaw("
             COUNT(*) as total_all,
             SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as total_completed,
             SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as total_cancelled,
@@ -39,7 +40,8 @@ class DashboardController extends Controller
             $completed, now()->startOfMonth(),
         ])->first();
 
-        $tasksByStatus = Task::select('status', DB::raw('count(*) as total'))
+        $tasksByStatus = Task::whereNotNull('area_id')
+            ->select('status', DB::raw('count(*) as total'))
             ->groupBy('status')
             ->pluck('total', 'status');
 
@@ -68,7 +70,8 @@ class DashboardController extends Controller
             : 0;
 
         // Personas con tareas pendientes (ordered by most pending)
-        $pendingByUser = Task::select('tasks.current_responsible_user_id', 'users.name as user_name', DB::raw('count(*) as total'))
+        $pendingByUser = Task::whereNotNull('tasks.area_id')
+            ->select('tasks.current_responsible_user_id', 'users.name as user_name', DB::raw('count(*) as total'))
             ->join('users', 'tasks.current_responsible_user_id', '=', 'users.id')
             ->whereNotIn('tasks.status', [$completed, $cancelled])
             ->groupBy('tasks.current_responsible_user_id', 'users.name')
@@ -79,6 +82,24 @@ class DashboardController extends Controller
                 'user_id' => $item->current_responsible_user_id,
                 'user_name' => $item->user_name,
                 'pending_tasks' => $item->total,
+            ]);
+
+        // Superadmin's own active tasks (personal + area), ordered by due date
+        $myTasks = Task::where('current_responsible_user_id', $request->user()->id)
+            ->whereNotIn('status', [$completed, $cancelled])
+            ->orderByRaw('due_date IS NULL, due_date ASC')
+            ->limit(10)
+            ->select(['id', 'title', 'status', 'priority', 'due_date', 'progress_percent', 'area_id'])
+            ->get()
+            ->map(fn (Task $task) => [
+                'id' => $task->id,
+                'title' => $task->title,
+                'status' => $task->status,
+                'priority' => $task->priority,
+                'due_date' => $task->due_date?->toDateString(),
+                'is_overdue' => $task->isOverdue(),
+                'progress_percent' => $task->progress_percent,
+                'area_id' => $task->area_id,
             ]);
 
         return response()->json([
@@ -93,6 +114,7 @@ class DashboardController extends Controller
             'completion_rate' => $completionRate,
             'global_progress' => $globalProgress,
             'pending_by_user' => $pendingByUser,
+            'my_tasks' => $myTasks,
         ]);
     }
 
@@ -156,8 +178,10 @@ class DashboardController extends Controller
         $completed = TaskStatusEnum::COMPLETED->value;
         $cancelled = TaskStatusEnum::CANCELLED->value;
 
+        // Personal tasks (area_id IS NULL) are excluded from dashboard metrics.
         // Single query for all counts (replaces 4 separate COUNT queries)
-        $stats = Task::where('current_responsible_user_id', $user->id)->toBase()->selectRaw("
+        $stats = Task::where('current_responsible_user_id', $user->id)
+            ->whereNotNull('area_id')->toBase()->selectRaw("
             SUM(CASE WHEN status NOT IN (?, ?) THEN 1 ELSE 0 END) as active,
             SUM(CASE WHEN due_date < CURRENT_DATE AND status NOT IN (?, ?) THEN 1 ELSE 0 END) as overdue,
             SUM(CASE WHEN due_date >= CURRENT_DATE AND due_date <= ? AND status NOT IN (?, ?) THEN 1 ELSE 0 END) as due_soon,
@@ -170,11 +194,13 @@ class DashboardController extends Controller
         ])->first();
 
         $byStatus = Task::where('current_responsible_user_id', $user->id)
+            ->whereNotNull('area_id')
             ->select('status', DB::raw('count(*) as total'))
             ->groupBy('status')
             ->pluck('total', 'status');
 
         $recentTasks = Task::where('current_responsible_user_id', $user->id)
+            ->whereNotNull('area_id')
             ->whereNotIn('status', [$completed, $cancelled])
             ->orderBy('due_date')
             ->limit(10)

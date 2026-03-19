@@ -19,9 +19,13 @@ class TaskCreationService
             $isExternalTask = !empty($data['external_email']);
             $isAreaAssignment = !empty($data['assigned_to_area_id']) && empty($data['assigned_to_user_id']);
 
-            // Resolve area_id: use explicit area, or derive from the assigned user's active area
+            // Resolve area_id: use explicit area, or derive from the assigned user's active area.
+            // Exception: self-assignment (creator assigns to themselves) creates a personal task
+            // with no area, so it won't appear in any dashboard.
             $areaId = $data['assigned_to_area_id'] ?? null;
-            if (!$areaId && !empty($data['assigned_to_user_id'])) {
+            $isSelfAssignment = !empty($data['assigned_to_user_id'])
+                && (int) $data['assigned_to_user_id'] === $creator->id;
+            if (!$areaId && !empty($data['assigned_to_user_id']) && !$isSelfAssignment) {
                 $areaId = DB::table('area_members')
                     ->where('user_id', $data['assigned_to_user_id'])
                     ->where('is_active', true)

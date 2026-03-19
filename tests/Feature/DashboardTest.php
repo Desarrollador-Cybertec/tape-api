@@ -73,6 +73,7 @@ class DashboardTest extends TestCase
         Task::create([
             'title' => 'T2',
             'created_by' => $this->admin->id,
+            'area_id' => $this->area->id,
             'status' => TaskStatusEnum::COMPLETED,
             'completed_at' => now(),
         ]);
@@ -160,6 +161,7 @@ class DashboardTest extends TestCase
         Task::create([
             'title' => 'Mi tarea',
             'created_by' => $this->admin->id,
+            'area_id' => $this->area->id,
             'current_responsible_user_id' => $this->worker->id,
             'status' => TaskStatusEnum::IN_PROGRESS,
             'due_date' => now()->addDay(),
@@ -168,6 +170,7 @@ class DashboardTest extends TestCase
         Task::create([
             'title' => 'Vencida',
             'created_by' => $this->admin->id,
+            'area_id' => $this->area->id,
             'current_responsible_user_id' => $this->worker->id,
             'status' => TaskStatusEnum::IN_PROGRESS,
             'due_date' => now()->subDays(2),
@@ -195,6 +198,7 @@ class DashboardTest extends TestCase
         Task::create([
             'title' => 'Vencida',
             'created_by' => $this->admin->id,
+            'area_id' => $this->area->id,
             'current_responsible_user_id' => $this->worker->id,
             'status' => TaskStatusEnum::IN_PROGRESS,
             'due_date' => now()->subDays(5),
@@ -203,6 +207,7 @@ class DashboardTest extends TestCase
         Task::create([
             'title' => 'A tiempo',
             'created_by' => $this->admin->id,
+            'area_id' => $this->area->id,
             'status' => TaskStatusEnum::IN_PROGRESS,
             'due_date' => now()->addDays(10),
         ]);
@@ -212,5 +217,130 @@ class DashboardTest extends TestCase
 
         $response->assertOk();
         $this->assertEquals(1, $response->json('overdue_tasks'));
+    }
+
+    public function test_personal_tasks_excluded_from_general_dashboard(): void
+    {
+        // Area task — should be counted
+        Task::create([
+            'title' => 'Tarea de área',
+            'created_by' => $this->admin->id,
+            'area_id' => $this->area->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'status' => TaskStatusEnum::PENDING,
+        ]);
+
+        // Personal task (self-assigned, area_id = null) — should NOT be counted
+        Task::create([
+            'title' => 'Tarea personal Admin',
+            'created_by' => $this->admin->id,
+            'assigned_to_user_id' => $this->admin->id,
+            'current_responsible_user_id' => $this->admin->id,
+            'area_id' => null,
+            'status' => TaskStatusEnum::PENDING,
+        ]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->getJson('/api/dashboard/general');
+
+        $response->assertOk();
+        $this->assertEquals(1, $response->json('total_all'), 'Personal tasks must not appear in total_all');
+    }
+
+    public function test_personal_tasks_excluded_from_my_dashboard(): void
+    {
+        // Area task assigned to worker — should be counted
+        Task::create([
+            'title' => 'Tarea de área',
+            'created_by' => $this->admin->id,
+            'area_id' => $this->area->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'status' => TaskStatusEnum::IN_PROGRESS,
+        ]);
+
+        // Personal task (self-assigned by worker, area_id = null) — should NOT be counted
+        Task::create([
+            'title' => 'Tarea personal Worker',
+            'created_by' => $this->worker->id,
+            'assigned_to_user_id' => $this->worker->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => null,
+            'status' => TaskStatusEnum::IN_PROGRESS,
+        ]);
+
+        $response = $this->actingAs($this->worker, 'sanctum')
+            ->getJson('/api/dashboard/me');
+
+        $response->assertOk();
+        $this->assertEquals(1, $response->json('active_tasks'), 'Personal tasks must not appear in active_tasks');
+    }
+
+    public function test_personal_task_visible_in_task_list(): void
+    {
+        // Personal task created via API (self-assigned)
+        $response = $this->actingAs($this->worker, 'sanctum')
+            ->postJson('/api/tasks', [
+                'title' => 'Mi tarea personal',
+                'assigned_to_user_id' => $this->worker->id,
+            ]);
+
+        $response->assertCreated();
+
+        $this->assertDatabaseHas('tasks', [
+            'title' => 'Mi tarea personal',
+            'area_id' => null,
+        ]);
+
+        // Must still appear in the worker's task list
+        $listResponse = $this->actingAs($this->worker, 'sanctum')
+            ->getJson('/api/tasks');
+
+        $listResponse->assertOk();
+        $titles = collect($listResponse->json('data'))->pluck('title');
+        $this->assertContains('Mi tarea personal', $titles);
+    }
+
+    public function test_general_dashboard_includes_superadmin_own_tasks(): void
+    {
+        // Task assigned to the superadmin themselves (personal, area_id = null)
+        Task::create([
+            'title' => 'Tarea propia del admin',
+            'created_by' => $this->admin->id,
+            'assigned_to_user_id' => $this->admin->id,
+            'current_responsible_user_id' => $this->admin->id,
+            'area_id' => null,
+            'status' => TaskStatusEnum::PENDING,
+        ]);
+
+        // Task assigned to the admin in an area
+        Task::create([
+            'title' => 'Tarea de area del admin',
+            'created_by' => $this->admin->id,
+            'current_responsible_user_id' => $this->admin->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::IN_PROGRESS,
+        ]);
+
+        // Task assigned to someone else — must NOT appear in my_tasks
+        Task::create([
+            'title' => 'Tarea de otro',
+            'created_by' => $this->admin->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::PENDING,
+        ]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->getJson('/api/dashboard/general');
+
+        $response->assertOk()->assertJsonStructure(['my_tasks']);
+
+        $myTasks = collect($response->json('my_tasks'));
+        $this->assertCount(2, $myTasks, 'my_tasks debe incluir tareas propias del superadmin (con y sin area)');
+
+        $titles = $myTasks->pluck('title');
+        $this->assertContains('Tarea propia del admin', $titles);
+        $this->assertContains('Tarea de area del admin', $titles);
+        $this->assertNotContains('Tarea de otro', $titles);
     }
 }

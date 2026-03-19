@@ -157,6 +157,42 @@ class TaskTest extends TestCase
         });
     }
 
+    public function test_superadmin_can_create_task_for_themselves(): void
+    {
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/tasks', [
+                'title' => 'Tarea propia del admin',
+                'assigned_to_user_id' => $this->admin->id,
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('status', TaskStatusEnum::PENDING->value);
+
+        $this->assertDatabaseHas('tasks', [
+            'title' => 'Tarea propia del admin',
+            'assigned_to_user_id' => $this->admin->id,
+            'current_responsible_user_id' => $this->admin->id,
+        ]);
+    }
+
+    public function test_manager_can_create_task_for_themselves(): void
+    {
+        $response = $this->actingAs($this->manager, 'sanctum')
+            ->postJson('/api/tasks', [
+                'title' => 'Tarea propia del manager',
+                'assigned_to_user_id' => $this->manager->id,
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('status', TaskStatusEnum::PENDING->value);
+
+        $this->assertDatabaseHas('tasks', [
+            'title' => 'Tarea propia del manager',
+            'assigned_to_user_id' => $this->manager->id,
+            'current_responsible_user_id' => $this->manager->id,
+        ]);
+    }
+
     public function test_manager_can_create_task_for_area_worker(): void
     {
         $response = $this->actingAs($this->manager, 'sanctum')
