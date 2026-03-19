@@ -25,17 +25,33 @@ class TaskCreationService
             $areaId = $data['assigned_to_area_id'] ?? null;
             $isSelfAssignment = !empty($data['assigned_to_user_id'])
                 && (int) $data['assigned_to_user_id'] === $creator->id;
+            $isManagerAssignment = false;
             if (!$areaId && !empty($data['assigned_to_user_id']) && !$isSelfAssignment) {
+                // First try area_members (worker case)
                 $areaId = DB::table('area_members')
                     ->where('user_id', $data['assigned_to_user_id'])
                     ->where('is_active', true)
                     ->value('area_id');
+
+                // If not found, check if the assigned user is the area manager
+                if (!$areaId) {
+                    $managedAreaId = DB::table('areas')
+                        ->where('manager_user_id', $data['assigned_to_user_id'])
+                        ->where('active', true)
+                        ->value('id');
+                    if ($managedAreaId) {
+                        $areaId = $managedAreaId;
+                        $isManagerAssignment = true;
+                    }
+                }
             }
 
             // Determine status
             if ($isExternalTask) {
                 $status = TaskStatusEnum::PENDING;
-            } elseif ($isAreaAssignment) {
+            } elseif ($isAreaAssignment || $isManagerAssignment) {
+                // Area assignments AND manager-user assignments both start as pending_assignment:
+                // the manager must claim the task (take responsibility) or delegate it.
                 $status = TaskStatusEnum::PENDING_ASSIGNMENT;
             } else {
                 $status = TaskStatusEnum::PENDING;
@@ -51,7 +67,8 @@ class TaskCreationService
                 'external_email' => $data['external_email'] ?? null,
                 'external_name' => $data['external_name'] ?? null,
                 'area_id' => $areaId,
-                'current_responsible_user_id' => $data['assigned_to_user_id'] ?? null,
+                // Manager-user assignments: manager must claim or delegate → no responsible yet
+                'current_responsible_user_id' => $isManagerAssignment ? null : ($data['assigned_to_user_id'] ?? null),
                 'priority' => $data['priority'] ?? 'medium',
                 'status' => $status,
                 'start_date' => $data['start_date'] ?? null,
@@ -71,6 +88,7 @@ class TaskCreationService
             TaskStatusHistory::create([
                 'task_id' => $task->id,
                 'changed_by' => $creator->id,
+                'user_id' => $task->current_responsible_user_id,
                 'from_status' => null,
                 'to_status' => $task->status,
                 'note' => 'Tarea creada',

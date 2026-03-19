@@ -128,31 +128,60 @@ class DashboardController extends Controller
 
         $completed = TaskStatusEnum::COMPLETED->value;
         $cancelled = TaskStatusEnum::CANCELLED->value;
+        $pendingAssignment = TaskStatusEnum::PENDING_ASSIGNMENT->value;
 
-        // Single query for total + completed + overdue + without_progress
+        // Single query for all aggregate counts
         $stats = Task::where('area_id', $area->id)->toBase()->selectRaw("
             COUNT(*) as total,
             SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed,
+            SUM(CASE WHEN status NOT IN (?, ?) THEN 1 ELSE 0 END) as active,
+            SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as pending_assignment,
             SUM(CASE WHEN due_date < CURRENT_DATE AND status NOT IN (?, ?) THEN 1 ELSE 0 END) as overdue,
+            SUM(CASE WHEN due_date >= CURRENT_DATE AND due_date <= ? AND status NOT IN (?, ?) THEN 1 ELSE 0 END) as due_soon,
             SUM(CASE WHEN status NOT IN (?, ?) AND NOT EXISTS (SELECT 1 FROM task_updates WHERE task_updates.task_id = tasks.id) THEN 1 ELSE 0 END) as without_progress
-        ", [$completed, $completed, $cancelled, $completed, $cancelled])->first();
+        ", [
+            $completed,
+            $completed, $cancelled,
+            $pendingAssignment,
+            $completed, $cancelled,
+            now()->addDays(3)->toDateString(), $completed, $cancelled,
+            $completed, $cancelled,
+        ])->first();
 
         $byStatus = Task::where('area_id', $area->id)
             ->select('status', DB::raw('count(*) as total'))
             ->groupBy('status')
             ->pluck('total', 'status');
 
-        // JOIN to resolve user names in one query (eliminates N+1)
-        $byResponsible = Task::select('tasks.current_responsible_user_id', 'users.name as user_name', DB::raw('count(*) as total'))
-            ->join('users', 'tasks.current_responsible_user_id', '=', 'users.id')
+        // LEFT JOIN to include tasks without a responsible (pending_assignment)
+        $byResponsible = Task::select(
+                'tasks.current_responsible_user_id',
+                'users.name as user_name',
+                DB::raw('count(*) as total')
+            )
+            ->leftJoin('users', 'tasks.current_responsible_user_id', '=', 'users.id')
             ->where('tasks.area_id', $area->id)
             ->whereNotIn('tasks.status', [$completed, $cancelled])
             ->groupBy('tasks.current_responsible_user_id', 'users.name')
             ->get()
             ->map(fn ($item) => [
                 'user_id' => $item->current_responsible_user_id,
-                'user_name' => $item->user_name,
+                'user_name' => $item->user_name ?? 'Sin responsable asignado',
                 'active_tasks' => $item->total,
+            ]);
+
+        // Pending assignment tasks (need claim or delegate)
+        $pendingAssignmentTasks = Task::where('area_id', $area->id)
+            ->where('status', TaskStatusEnum::PENDING_ASSIGNMENT)
+            ->select(['id', 'title', 'priority', 'due_date', 'assigned_to_user_id', 'created_at'])
+            ->orderByRaw('due_date IS NULL, due_date ASC')
+            ->get()
+            ->map(fn (Task $task) => [
+                'id' => $task->id,
+                'title' => $task->title,
+                'priority' => $task->priority,
+                'due_date' => $task->due_date?->toDateString(),
+                'created_at' => $task->created_at,
             ]);
 
         $total = (int) $stats->total;
@@ -160,14 +189,18 @@ class DashboardController extends Controller
         $completionRate = $total > 0 ? round(($completedCount / $total) * 100, 1) : 0;
 
         return response()->json([
-            'area' => ['id' => $area->id, 'name' => $area->name],
-            'tasks_by_status' => $byStatus,
-            'overdue_tasks' => (int) $stats->overdue,
-            'by_responsible' => $byResponsible,
+            'area' => ['id' => $area->id, 'name' => $area->name, 'manager_user_id' => $area->manager_user_id],
             'total_tasks' => $total,
+            'active_tasks' => (int) $stats->active,
             'completed_tasks' => $completedCount,
-            'completion_rate' => $completionRate,
+            'overdue_tasks' => (int) $stats->overdue,
+            'due_soon' => (int) $stats->due_soon,
             'without_progress' => (int) $stats->without_progress,
+            'pending_assignment_tasks' => (int) $stats->pending_assignment,
+            'completion_rate' => $completionRate,
+            'tasks_by_status' => $byStatus,
+            'by_responsible' => $byResponsible,
+            'awaiting_claim' => $pendingAssignmentTasks,
         ]);
     }
 
@@ -326,7 +359,7 @@ class DashboardController extends Controller
         });
 
         // Global summary — single query with conditional aggregation (replaces 4 queries)
-        $summary = Task::toBase()->selectRaw("
+        $summary = Task::whereNotNull('area_id')->toBase()->selectRaw("
             COUNT(*) as total_tasks,
             SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as total_completed,
             SUM(CASE WHEN status NOT IN (?, ?) THEN 1 ELSE 0 END) as total_active,

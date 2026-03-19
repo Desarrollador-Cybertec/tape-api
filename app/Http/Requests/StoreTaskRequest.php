@@ -71,7 +71,6 @@ class StoreTaskRequest extends FormRequest
                 }
 
                 if ($user->isAreaManager()) {
-                    // Can assign to workers in their managed areas, OR to themselves
                     if ($hasUser) {
                         $targetUserId = (int) $this->input('assigned_to_user_id');
 
@@ -80,6 +79,7 @@ class StoreTaskRequest extends FormRequest
                             return;
                         }
 
+                        // Can only assign to workers in their managed areas
                         $managedAreaIds = $user->managedAreas()->pluck('id');
                         $inManagedArea = \DB::table('area_members')
                             ->where('user_id', $targetUserId)
@@ -94,8 +94,7 @@ class StoreTaskRequest extends FormRequest
                             );
                         }
                     }
-                    // Can assign to any area (cross-area request) → allowed
-                    // Can send to external email → allowed
+                    // Can assign to any area (cross-area) and external email → allowed
                     return;
                 }
 

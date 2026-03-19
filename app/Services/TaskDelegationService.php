@@ -57,15 +57,14 @@ class TaskDelegationService
                 'status' => TaskStatusEnum::PENDING,
             ]);
 
-            if ($oldStatus !== TaskStatusEnum::PENDING) {
-                TaskStatusHistory::create([
-                    'task_id' => $task->id,
-                    'changed_by' => $fromUser->id,
-                    'from_status' => $oldStatus,
-                    'to_status' => TaskStatusEnum::PENDING,
-                    'note' => "Delegada a {$toUser->name}",
-                ]);
-            }
+            TaskStatusHistory::create([
+                'task_id' => $task->id,
+                'changed_by' => $fromUser->id,
+                'user_id' => $toUserId,
+                'from_status' => $oldStatus,
+                'to_status' => TaskStatusEnum::PENDING,
+                'note' => "Delegada a {$toUser->name}",
+            ]);
 
             ActivityLog::create([
                 'user_id' => $fromUser->id,

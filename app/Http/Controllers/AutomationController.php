@@ -74,6 +74,7 @@ class AutomationController extends Controller
                 TaskStatusHistory::create([
                     'task_id' => $task->id,
                     'changed_by' => $user->id,
+                    'user_id' => $task->current_responsible_user_id,
                     'from_status' => $oldStatus,
                     'to_status' => TaskStatusEnum::OVERDUE,
                     'note' => 'Marcada como vencida manualmente por encargado',

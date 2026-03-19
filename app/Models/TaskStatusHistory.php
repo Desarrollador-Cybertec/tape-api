@@ -15,6 +15,7 @@ class TaskStatusHistory extends Model
     protected $fillable = [
         'task_id',
         'changed_by',
+        'user_id',
         'from_status',
         'to_status',
         'note',
@@ -38,5 +39,10 @@ class TaskStatusHistory extends Model
     public function changedByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'changed_by');
+    }
+
+    public function responsibleUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
     }
 }

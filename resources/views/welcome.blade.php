@@ -462,7 +462,7 @@
                 seguimiento de avances, notificaciones automáticas consolidadas y dashboards analíticos.
             </p>
             <div class="hero-badges">
-                <span class="badge"><span class="badge-dot green"></span> 179 tests passing</span>
+                <span class="badge"><span class="badge-dot green"></span> 187 tests passing</span>
                 <span class="badge"><span class="badge-dot blue"></span> Laravel 12</span>
                 <span class="badge"><span class="badge-dot purple"></span> Sanctum Auth</span>
                 <span class="badge"><span class="badge-dot yellow"></span> PostgreSQL / Supabase</span>
@@ -842,7 +842,13 @@ Content-Type: application/json
                             <td>Eliminar tarea</td>
                             <td><span class="role-badge">superadmin</span> <span class="role-badge">area_manager</span></td>
                         </tr>
-                        <tr></tr>
+                        <tr>
+                            <td><span class="method method-post">POST</span></td>
+                            <td class="endpoint">/api/tasks/{'{id}'}/claim</td>
+                            <td>Reclamar tarea (tomar responsabilidad)</td>
+                            <td><span class="role-badge">superadmin</span> <span class="role-badge">area_manager</span></td>
+                        </tr>
+                        <tr>
                             <td><span class="method method-post">POST</span></td>
                             <td class="endpoint">/api/tasks/{'{id}'}/delegate</td>
                             <td>Delegar tarea a otro trabajador</td>
@@ -1736,7 +1742,7 @@ attachment_type: evidence | support | final_delivery</code></pre>
         {{-- ═══════════════ TESTS ═══════════════ --}}
         <div class="section" id="tests">
             <h2>Tests</h2>
-            <p>179 tests organizados por feature — todos pasando con SQLite in-memory.</p>
+            <p>187 tests organizados por feature — todos pasando con SQLite in-memory.</p>
 
             <div class="table-wrap">
                 <table>
@@ -1744,17 +1750,17 @@ attachment_type: evidence | support | final_delivery</code></pre>
                     <tbody>
                         <tr><td><code>AuthTest</code></td><td>7</td><td>Login, logout, perfil, credenciales inválidas, usuario inactivo, campos requeridos, rutas protegidas</td></tr>
                         <tr><td><code>UserTest</code></td><td>11</td><td>CRUD, cambio de rol, activar/desactivar, validación de password, email único, filtro exclude_area</td></tr>
-                        <tr><td><code>AreaTest</code></td><td>15</td><td>CRUD, asignar encargado, reclamar trabajador, workers disponibles, búsqueda, miembros del área</td></tr>
+                        <tr><td><code>AreaTest</code></td><td>16</td><td>CRUD, asignar encargado, reclamar trabajador, workers disponibles, búsqueda, miembros del área, manager ve todas las áreas</td></tr>
                         <tr><td><code>MeetingTest</code></td><td>10</td><td>CRUD, permisos, vinculación con tareas, filtrado por área y clasificación</td></tr>
-                        <tr><td><code>TaskTest</code></td><td>47</td><td>CRUD, delegación, flujo completo de estados, adjuntos, comentarios, reabrir, eliminar, tareas externas, auto-asignación, tareas personales</td></tr>
+                        <tr><td><code>TaskTest</code></td><td>52</td><td>CRUD, delegación, reclamar, flujo completo de estados, adjuntos, comentarios, reabrir, eliminar, tareas externas, auto-asignación, tareas personales, asignación a encargado, asignación cross-área, user_id en historial</td></tr>
                         <tr><td><code>TaskUpdateTest</code></td><td>6</td><td>Avances, validaciones, permisos, sincronización de progreso</td></tr>
-                        <tr><td><code>DashboardTest</code></td><td>11</td><td>Dashboard general, por área, personal, permisos, métricas, exclusión de tareas personales, tareas propias del superadmin</td></tr>
+                        <tr><td><code>DashboardTest</code></td><td>13</td><td>Dashboard general, por área, personal, permisos, métricas, exclusión de tareas personales, tareas propias del superadmin, awaiting_claim</td></tr>
                         <tr><td><code>ScheduledCommandsTest</code></td><td>6</td><td>Detección overdue, resumen diario, recordatorios, flags</td></tr>
                         <tr><td><code>SystemSettingTest</code></td><td>10</td><td>CRUD, agrupación, filtrado, casteo de tipos, permisos</td></tr>
                         <tr><td><code>MessageTemplateTest</code></td><td>9</td><td>CRUD, activar/desactivar, validaciones, permisos</td></tr>
                         <tr><td><code>AutomationTest</code></td><td>17</td><td>Triggers manuales, permisos, configuración enabled/disabled, validaciones</td></tr>
                         <tr><td><code>InactivityDetectionTest</code></td><td>10</td><td>Detección de inactividad, consolidación, configuración, trigger API</td></tr>
-                        <tr><td><code>ConsolidatedDashboardTest</code></td><td>7</td><td>Dashboard consolidado, proceso/área, permisos, múltiples áreas</td></tr>
+                        <tr><td><code>ConsolidatedDashboardTest</code></td><td>8</td><td>Dashboard consolidado, proceso/área, permisos, múltiples áreas, exclusión de tareas personales</td></tr>
                         <tr><td><code>ImportTest</code></td><td>11</td><td>Importación CSV, áreas automáticas, mapeo estados/fechas, permisos</td></tr>
                     </tbody>
                 </table>

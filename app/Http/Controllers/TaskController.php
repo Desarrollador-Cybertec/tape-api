@@ -15,10 +15,13 @@ use App\Http\Resources\TaskAttachmentResource;
 use App\Http\Resources\TaskCommentResource;
 use App\Http\Resources\TaskResource;
 use App\Http\Resources\TaskUpdateResource;
+use App\Enums\TaskStatusEnum;
+use App\Models\ActivityLog;
 use App\Models\Area;
 use App\Models\Task;
 use App\Models\TaskAttachment;
 use App\Models\TaskComment;
+use App\Models\TaskStatusHistory;
 use App\Models\TaskUpdate;
 use App\Services\TaskCompletionService;
 use App\Services\TaskCreationService;
@@ -106,6 +109,7 @@ class TaskController extends Controller
                 'delegations.fromUser',
                 'delegations.toUser',
                 'statusHistory.changedByUser',
+                'statusHistory.responsibleUser',
                 'updates.user',
                 'latestUpdate',
             ])->loadCount(['comments', 'attachments', 'updates'])
@@ -117,6 +121,43 @@ class TaskController extends Controller
         $task->update($request->validated());
 
         return new TaskResource($task->fresh(['creator', 'currentResponsible', 'area', 'latestUpdate']));
+    }
+
+    public function claim(Task $task): TaskResource|JsonResponse
+    {
+        $this->authorize('claim', $task);
+
+        if ($task->status !== TaskStatusEnum::PENDING_ASSIGNMENT) {
+            return response()->json(
+                ['message' => 'Solo se puede reclamar una tarea en estado pending_assignment.'],
+                422
+            );
+        }
+
+        $user = request()->user();
+
+        $task->update([
+            'current_responsible_user_id' => $user->id,
+            'status' => TaskStatusEnum::PENDING,
+        ]);
+
+        TaskStatusHistory::create([
+            'task_id' => $task->id,
+            'changed_by' => $user->id,            'user_id'     => $user->id,            'from_status' => TaskStatusEnum::PENDING_ASSIGNMENT,
+            'to_status' => TaskStatusEnum::PENDING,
+            'note' => 'Tarea reclamada como responsable',
+        ]);
+
+        ActivityLog::create([
+            'user_id' => $user->id,
+            'module' => 'tasks',
+            'action' => 'claimed',
+            'subject_type' => Task::class,
+            'subject_id' => $task->id,
+            'description' => "Tarea reclamada por {$user->name}",
+        ]);
+
+        return new TaskResource($task->fresh(['currentResponsible', 'area', 'latestUpdate']));
     }
 
     public function delegate(DelegateTaskRequest $request, Task $task, TaskDelegationService $service): TaskResource

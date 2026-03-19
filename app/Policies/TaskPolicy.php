@@ -117,6 +117,15 @@ class TaskPolicy
             || $task->current_responsible_user_id === $user->id;
     }
 
+    public function claim(User $user, Task $task): bool
+    {
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return $task->area_id && $user->isManagerOfArea($task->area_id);
+    }
+
     public function delete(User $user, Task $task): bool
     {
         return $user->isSuperAdmin();

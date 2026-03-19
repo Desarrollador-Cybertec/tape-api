@@ -42,6 +42,7 @@ class TaskStatusService
             TaskStatusHistory::create([
                 'task_id' => $task->id,
                 'changed_by' => $changedBy->id,
+                'user_id' => $task->current_responsible_user_id,
                 'from_status' => $oldStatus,
                 'to_status' => $newStatus,
                 'note' => $note,

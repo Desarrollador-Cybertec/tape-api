@@ -220,4 +220,33 @@ class ConsolidatedDashboardTest extends TestCase
         $this->assertEquals(2, $response->json('summary.total_tasks'));
         $this->assertEquals(50.0, $response->json('summary.global_completion_rate'));
     }
+
+    public function test_personal_tasks_excluded_from_consolidated_summary(): void
+    {
+        // Area task — must be counted
+        Task::create([
+            'title' => 'Tarea de área',
+            'created_by' => $this->admin->id,
+            'area_id' => $this->area->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'status' => TaskStatusEnum::PENDING,
+        ]);
+
+        // Personal task (area_id = null) — must NOT appear in summary
+        Task::create([
+            'title' => 'Tarea personal',
+            'created_by' => $this->admin->id,
+            'assigned_to_user_id' => $this->admin->id,
+            'current_responsible_user_id' => $this->admin->id,
+            'area_id' => null,
+            'status' => TaskStatusEnum::PENDING,
+        ]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->getJson('/api/dashboard/consolidated');
+
+        $response->assertOk();
+        $this->assertEquals(1, $response->json('summary.total_tasks'), 'Personal tasks must not appear in consolidated summary');
+        $this->assertEquals(1, $response->json('summary.total_active'));
+    }
 }

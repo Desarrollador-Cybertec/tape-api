@@ -149,6 +149,19 @@ class AreaTest extends TestCase
             ->assertJsonCount(2, 'data');
     }
 
+    public function test_area_manager_can_list_all_areas(): void
+    {
+        $manager = $this->createUser(RoleEnum::AREA_MANAGER);
+        Area::create(['name' => 'Área del Manager', 'manager_user_id' => $manager->id]);
+        Area::create(['name' => 'Otra Área']);
+
+        $response = $this->actingAs($manager, 'sanctum')
+            ->getJson('/api/areas');
+
+        $response->assertOk()
+            ->assertJsonCount(2, 'data');
+    }
+
     public function test_superadmin_can_update_area(): void
     {
         $admin = $this->createUser(RoleEnum::SUPERADMIN);

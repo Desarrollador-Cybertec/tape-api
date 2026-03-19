@@ -39,6 +39,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Tasks
     Route::apiResource('tasks', TaskController::class);
+    Route::post('/tasks/{task}/claim', [TaskController::class, 'claim']);
     Route::post('/tasks/{task}/delegate', [TaskController::class, 'delegate']);
     Route::post('/tasks/{task}/start', [TaskController::class, 'start']);
     Route::post('/tasks/{task}/submit-review', [TaskController::class, 'submitForReview']);

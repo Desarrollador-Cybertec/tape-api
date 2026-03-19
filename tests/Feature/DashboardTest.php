@@ -122,15 +122,49 @@ class DashboardTest extends TestCase
         $response->assertOk()
             ->assertJsonStructure([
                 'area',
-                'tasks_by_status',
-                'overdue_tasks',
-                'by_responsible',
                 'total_tasks',
-                'completion_rate',
+                'active_tasks',
+                'completed_tasks',
+                'overdue_tasks',
+                'due_soon',
                 'without_progress',
+                'pending_assignment_tasks',
+                'completion_rate',
+                'tasks_by_status',
+                'by_responsible',
+                'awaiting_claim',
             ]);
 
         $this->assertEquals(1, $response->json('total_tasks'));
+        $this->assertEquals(1, $response->json('active_tasks'));
+        $this->assertEquals(0, $response->json('pending_assignment_tasks'));
+    }
+
+    public function test_area_dashboard_shows_pending_assignment_in_awaiting_claim(): void
+    {
+        // Task assigned to manager (pending_assignment, no responsible yet)
+        Task::create([
+            'title' => 'Tarea sin reclamar',
+            'created_by' => $this->admin->id,
+            'area_id' => $this->area->id,
+            'assigned_to_user_id' => $this->manager->id,
+            'current_responsible_user_id' => null,
+            'status' => TaskStatusEnum::PENDING_ASSIGNMENT,
+        ]);
+
+        $response = $this->actingAs($this->manager, 'sanctum')
+            ->getJson("/api/dashboard/area/{$this->area->id}");
+
+        $response->assertOk();
+        $this->assertEquals(1, $response->json('pending_assignment_tasks'));
+        $this->assertEquals(1, $response->json('total_tasks'));
+        $this->assertCount(1, $response->json('awaiting_claim'));
+
+        // Must appear in by_responsible as 'Sin responsable asignado'
+        $byResponsible = collect($response->json('by_responsible'));
+        $unassigned = $byResponsible->firstWhere('user_id', null);
+        $this->assertNotNull($unassigned);
+        $this->assertEquals('Sin responsable asignado', $unassigned['user_name']);
     }
 
     public function test_manager_can_access_own_area_dashboard(): void

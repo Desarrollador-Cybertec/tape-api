@@ -45,6 +45,7 @@ class DetectOverdueTasks extends Command
             TaskStatusHistory::create([
                 'task_id' => $task->id,
                 'changed_by' => $task->created_by,
+                'user_id' => $task->current_responsible_user_id,
                 'from_status' => $oldStatus,
                 'to_status' => TaskStatusEnum::OVERDUE,
                 'note' => 'Marcada como vencida automáticamente',

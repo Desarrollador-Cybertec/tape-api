@@ -89,7 +89,11 @@ class TaskCompletionService
 
         if ($task->requires_completion_comment) {
             $hasCompletionNote = $task->comments()
-                ->where('type', CommentTypeEnum::COMPLETION_NOTE)
+                ->whereIn('type', [
+                    CommentTypeEnum::COMPLETION_NOTE->value,
+                    CommentTypeEnum::COMMENT->value,
+                    CommentTypeEnum::PROGRESS->value,
+                ])
                 ->exists();
 
             if (!$hasCompletionNote) {

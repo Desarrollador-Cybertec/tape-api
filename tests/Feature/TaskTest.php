@@ -819,9 +819,10 @@ class TaskTest extends TestCase
             ->postJson("/api/tasks/{$task->id}/start");
 
         $this->assertDatabaseHas('task_status_history', [
-            'task_id' => $task->id,
+            'task_id'     => $task->id,
+            'user_id'     => $this->worker->id,
             'from_status' => TaskStatusEnum::PENDING->value,
-            'to_status' => TaskStatusEnum::IN_PROGRESS->value,
+            'to_status'   => TaskStatusEnum::IN_PROGRESS->value,
         ]);
     }
 
@@ -903,5 +904,108 @@ class TaskTest extends TestCase
             ->assertOk();
 
         $this->assertDatabaseMissing('task_comments', ['task_id' => $task->id]);
+    }
+
+    // ── Manager-user assignment (area task via manager) ──
+
+    public function test_admin_assigning_to_manager_creates_area_task_pending_assignment(): void
+    {
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/tasks', [
+                'title' => 'Tarea para encargado',
+                'assigned_to_user_id' => $this->manager->id,
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('status', TaskStatusEnum::PENDING_ASSIGNMENT->value);
+
+        $this->assertDatabaseHas('tasks', [
+            'title' => 'Tarea para encargado',
+            'area_id' => $this->area->id,
+            'assigned_to_user_id' => $this->manager->id,
+            'current_responsible_user_id' => null, // must claim or delegate first
+            'status' => TaskStatusEnum::PENDING_ASSIGNMENT->value,
+        ]);
+    }
+
+    public function test_manager_can_claim_area_task_assigned_to_them(): void
+    {
+        // Admin creates task directed to manager
+        $task = Task::create([
+            'title' => 'Tarea para reclamar',
+            'created_by' => $this->admin->id,
+            'assigned_to_user_id' => $this->manager->id,
+            'current_responsible_user_id' => null,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::PENDING_ASSIGNMENT,
+        ]);
+
+        $response = $this->actingAs($this->manager, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/claim");
+
+        $response->assertOk();
+
+        $fresh = $task->fresh();
+        $this->assertEquals(TaskStatusEnum::PENDING, $fresh->status);
+        $this->assertEquals($this->manager->id, $fresh->current_responsible_user_id);
+
+        $this->assertDatabaseHas('task_status_history', [
+            'task_id'     => $task->id,
+            'user_id'     => $this->manager->id,
+            'from_status' => TaskStatusEnum::PENDING_ASSIGNMENT->value,
+            'to_status'   => TaskStatusEnum::PENDING->value,
+        ]);
+    }
+
+    public function test_manager_can_delegate_pending_assignment_task_to_worker(): void
+    {
+        $task = Task::create([
+            'title' => 'Tarea para delegar desde area',
+            'created_by' => $this->admin->id,
+            'assigned_to_user_id' => $this->manager->id,
+            'current_responsible_user_id' => $this->manager->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::PENDING_ASSIGNMENT,
+        ]);
+
+        $response = $this->actingAs($this->manager, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/delegate", [
+                'to_user_id' => $this->worker->id,
+            ]);
+
+        $response->assertOk();
+
+        $fresh = $task->fresh();
+        $this->assertEquals(TaskStatusEnum::PENDING, $fresh->status);
+        $this->assertEquals($this->worker->id, $fresh->current_responsible_user_id);
+    }
+
+    public function test_worker_cannot_claim_task(): void
+    {
+        $task = Task::create([
+            'title' => 'Tarea sin responsable',
+            'created_by' => $this->admin->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::PENDING_ASSIGNMENT,
+        ]);
+
+        $this->actingAs($this->worker, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/claim")
+            ->assertForbidden();
+    }
+
+    public function test_claim_fails_when_task_not_pending_assignment(): void
+    {
+        $task = Task::create([
+            'title' => 'Tarea activa',
+            'created_by' => $this->admin->id,
+            'current_responsible_user_id' => $this->manager->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::PENDING,
+        ]);
+
+        $this->actingAs($this->manager, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/claim")
+            ->assertUnprocessable();
     }
 }
