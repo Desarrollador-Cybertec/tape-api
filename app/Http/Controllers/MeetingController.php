@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreMeetingRequest;
+use App\Http\Requests\StoreMeetingTasksRequest;
 use App\Http\Requests\UpdateMeetingRequest;
 use App\Http\Resources\MeetingResource;
+use App\Http\Resources\TaskResource;
 use App\Models\ActivityLog;
 use App\Models\Area;
 use App\Models\Meeting;
+use App\Services\TaskCreationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -86,5 +89,28 @@ class MeetingController extends Controller
         $meeting->delete();
 
         return response()->json(['message' => 'Reunión eliminada exitosamente.']);
+    }
+
+    public function storeTasks(StoreMeetingTasksRequest $request, Meeting $meeting, TaskCreationService $service): JsonResponse
+    {
+        $this->authorize('view', $meeting);
+
+        $createdTasks = [];
+
+        foreach ($request->validated()['tasks'] as $taskData) {
+            $taskData['meeting_id'] = $meeting->id;
+            $createdTasks[] = $service->create($taskData, $request->user());
+        }
+
+        $taskIds = array_map(fn ($t) => $t->id, $createdTasks);
+        $tasks = \App\Models\Task::with([
+            'creator', 'assignedUser', 'assignedArea',
+            'currentResponsible', 'area',
+        ])->whereIn('id', $taskIds)->get();
+
+        return response()->json([
+            'message' => count($createdTasks) . ' tarea(s) creada(s) para la reunión.',
+            'tasks' => TaskResource::collection($tasks),
+        ], 201);
     }
 }

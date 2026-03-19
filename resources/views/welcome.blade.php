@@ -462,7 +462,7 @@
                 seguimiento de avances, notificaciones automáticas consolidadas y dashboards analíticos.
             </p>
             <div class="hero-badges">
-                <span class="badge"><span class="badge-dot green"></span> 187 tests passing</span>
+                <span class="badge"><span class="badge-dot green"></span> 194 tests passing</span>
                 <span class="badge"><span class="badge-dot blue"></span> Laravel 12</span>
                 <span class="badge"><span class="badge-dot purple"></span> Sanctum Auth</span>
                 <span class="badge"><span class="badge-dot yellow"></span> PostgreSQL / Supabase</span>
@@ -1742,7 +1742,7 @@ attachment_type: evidence | support | final_delivery</code></pre>
         {{-- ═══════════════ TESTS ═══════════════ --}}
         <div class="section" id="tests">
             <h2>Tests</h2>
-            <p>187 tests organizados por feature — todos pasando con SQLite in-memory.</p>
+            <p>194 tests organizados por feature — todos pasando con SQLite in-memory.</p>
 
             <div class="table-wrap">
                 <table>
@@ -1751,7 +1751,7 @@ attachment_type: evidence | support | final_delivery</code></pre>
                         <tr><td><code>AuthTest</code></td><td>7</td><td>Login, logout, perfil, credenciales inválidas, usuario inactivo, campos requeridos, rutas protegidas</td></tr>
                         <tr><td><code>UserTest</code></td><td>11</td><td>CRUD, cambio de rol, activar/desactivar, validación de password, email único, filtro exclude_area</td></tr>
                         <tr><td><code>AreaTest</code></td><td>16</td><td>CRUD, asignar encargado, reclamar trabajador, workers disponibles, búsqueda, miembros del área, manager ve todas las áreas</td></tr>
-                        <tr><td><code>MeetingTest</code></td><td>10</td><td>CRUD, permisos, vinculación con tareas, filtrado por área y clasificación</td></tr>
+                        <tr><td><code>MeetingTest</code></td><td>17</td><td>CRUD, permisos, vinculación con tareas, filtrado por área y clasificación, creación batch de tareas desde reunión</td></tr>
                         <tr><td><code>TaskTest</code></td><td>52</td><td>CRUD, delegación, reclamar, flujo completo de estados, adjuntos, comentarios, reabrir, eliminar, tareas externas, auto-asignación, tareas personales, asignación a encargado, asignación cross-área, user_id en historial</td></tr>
                         <tr><td><code>TaskUpdateTest</code></td><td>6</td><td>Avances, validaciones, permisos, sincronización de progreso</td></tr>
                         <tr><td><code>DashboardTest</code></td><td>13</td><td>Dashboard general, por área, personal, permisos, métricas, exclusión de tareas personales, tareas propias del superadmin, awaiting_claim</td></tr>

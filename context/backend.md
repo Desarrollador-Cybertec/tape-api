@@ -61,7 +61,7 @@ php artisan test
 php vendor/bin/phpunit --testdox
 ```
 
-138 tests, 316 assertions — todos pasando.
+194 tests, 472 assertions — todos pasando.
 
 ### 4. Scheduler (producción)
 
@@ -154,7 +154,8 @@ app/
 - Campos: `task_id`, `uploaded_by`, `file_name`, `file_path`, `mime_type`, `file_size`, `attachment_type`
 
 ### TaskStatusHistory
-- Campos: `task_id`, `changed_by`, `from_status`, `to_status`, `note`
+- Campos: `task_id`, `changed_by`, `user_id` (responsable al momento del cambio), `from_status`, `to_status`, `note`
+- `belongsTo` changedByUser, responsibleUser
 
 ### ActivityLog
 - Campos: `user_id`, `module`, `action`, `subject_type`, `subject_id`, `description`, `metadata`
@@ -226,7 +227,7 @@ Base URL: `/api`
 
 | Método | Endpoint                    | Descripción                | Roles permitidos |
 |--------|-----------------------------|---------------------------|-----------------|
-| GET    | `/areas`                    | Listar áreas              | superadmin, area_manager |
+| GET    | `/areas`                    | Listar áreas (manager ve todas) | superadmin, area_manager |
 | POST   | `/areas`                    | Crear área                | superadmin       |
 | GET    | `/areas/{id}`               | Ver área                  | superadmin, area_manager |
 | PUT    | `/areas/{id}`               | Actualizar área           | superadmin       |
@@ -314,7 +315,7 @@ cualquier estado activo → cancelled
 
 Antes de enviar a revisión (`submit-review`), se valida:
 - Si `requires_attachment = true` → debe tener al menos un adjunto.
-- Si `requires_completion_comment = true` → debe enviar `completion_comment`.
+- Si `requires_completion_comment = true` → debe existir al menos un comentario de tipo `comment`, `progress` o `completion_note` (cualquier comentario no-sistema del responsable cuenta).
 
 ### Aprobación / Rechazo
 - Si `requires_manager_approval = true` → pasa a `in_review` antes de `completed`.
@@ -473,14 +474,14 @@ Retorna:
 
 ## Tests
 
-138 tests organizados por feature, 316 assertions:
+194 tests organizados por feature, 472 assertions:
 
 | Suite                      | Tests | Cobertura                                                                |
 |----------------------------|-------|--------------------------------------------------------------------------|
 | AuthTest                   | 7     | Login, logout, perfil, credenciales inválidas, usuario inactivo, validaciones |
 | UserTest                   | 9     | CRUD, cambio de rol, activar/desactivar, validaciones                    |
 | AreaTest                   | 7     | CRUD, asignar encargado, reclamar trabajador, validaciones               |
-| MeetingTest                | 10    | CRUD, permisos, vinculación con tareas, filtrado por área                |
+| MeetingTest                | 17    | CRUD, permisos, vinculación con tareas, filtrado por área, creación batch de tareas |
 | TaskTest                   | 25    | CRUD, delegación, flujo completo de estados, adjuntos, comentarios       |
 | TaskUpdateTest             | 6     | Avances, validaciones, permisos, sincronización de progreso              |
 | DashboardTest              | 7     | Dashboard general, por área, personal, permisos, métricas               |

@@ -224,4 +224,194 @@ class MeetingTest extends TestCase
             'meeting_id' => $meeting->id,
         ]);
     }
+
+    // ── Batch Task Creation ──
+
+    public function test_superadmin_can_batch_create_tasks_for_meeting(): void
+    {
+        AreaMember::create([
+            'area_id' => $this->area->id,
+            'user_id' => $this->worker->id,
+            'is_active' => true,
+            'joined_at' => now(),
+        ]);
+
+        $meeting = Meeting::create([
+            'title' => 'Reunión batch',
+            'meeting_date' => '2026-03-20',
+            'area_id' => $this->area->id,
+            'created_by' => $this->admin->id,
+        ]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson("/api/meetings/{$meeting->id}/tasks", [
+                'tasks' => [
+                    [
+                        'title' => 'Tarea 1 de reunión',
+                        'assigned_to_user_id' => $this->worker->id,
+                        'priority' => 'high',
+                    ],
+                    [
+                        'title' => 'Tarea 2 de reunión',
+                        'assigned_to_area_id' => $this->area->id,
+                    ],
+                    [
+                        'title' => 'Tarea 3 externa',
+                        'external_email' => 'externo@test.com',
+                        'external_name' => 'Externo',
+                    ],
+                ],
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonCount(3, 'tasks');
+
+        $this->assertDatabaseCount('tasks', 3);
+
+        // All linked to the meeting
+        $this->assertDatabaseHas('tasks', ['title' => 'Tarea 1 de reunión', 'meeting_id' => $meeting->id, 'status' => 'pending']);
+        $this->assertDatabaseHas('tasks', ['title' => 'Tarea 2 de reunión', 'meeting_id' => $meeting->id, 'status' => 'pending_assignment']);
+        $this->assertDatabaseHas('tasks', ['title' => 'Tarea 3 externa', 'meeting_id' => $meeting->id]);
+    }
+
+    public function test_manager_can_batch_create_tasks_for_own_area_meeting(): void
+    {
+        AreaMember::create([
+            'area_id' => $this->area->id,
+            'user_id' => $this->worker->id,
+            'is_active' => true,
+            'joined_at' => now(),
+        ]);
+
+        $meeting = Meeting::create([
+            'title' => 'Reunión del manager',
+            'meeting_date' => '2026-03-20',
+            'area_id' => $this->area->id,
+            'created_by' => $this->manager->id,
+        ]);
+
+        $response = $this->actingAs($this->manager, 'sanctum')
+            ->postJson("/api/meetings/{$meeting->id}/tasks", [
+                'tasks' => [
+                    [
+                        'title' => 'Tarea para worker',
+                        'assigned_to_user_id' => $this->worker->id,
+                    ],
+                    [
+                        'title' => 'Tarea para otra área',
+                        'assigned_to_area_id' => $this->area->id,
+                    ],
+                ],
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonCount(2, 'tasks');
+    }
+
+    public function test_manager_cannot_batch_assign_to_worker_outside_area(): void
+    {
+        $otherWorker = User::factory()->create([
+            'role_id' => $this->roles['worker']->id,
+        ]);
+
+        $meeting = Meeting::create([
+            'title' => 'Reunión',
+            'meeting_date' => '2026-03-20',
+            'area_id' => $this->area->id,
+            'created_by' => $this->manager->id,
+        ]);
+
+        $response = $this->actingAs($this->manager, 'sanctum')
+            ->postJson("/api/meetings/{$meeting->id}/tasks", [
+                'tasks' => [
+                    [
+                        'title' => 'Tarea inválida',
+                        'assigned_to_user_id' => $otherWorker->id,
+                    ],
+                ],
+            ]);
+
+        $response->assertUnprocessable();
+        $this->assertDatabaseCount('tasks', 0);
+    }
+
+    public function test_worker_cannot_batch_create_meeting_tasks(): void
+    {
+        $meeting = Meeting::create([
+            'title' => 'Reunión',
+            'meeting_date' => '2026-03-20',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $response = $this->actingAs($this->worker, 'sanctum')
+            ->postJson("/api/meetings/{$meeting->id}/tasks", [
+                'tasks' => [
+                    ['title' => 'Intento', 'assigned_to_user_id' => $this->worker->id],
+                ],
+            ]);
+
+        $response->assertForbidden();
+    }
+
+    public function test_batch_tasks_require_at_least_one_task(): void
+    {
+        $meeting = Meeting::create([
+            'title' => 'Reunión',
+            'meeting_date' => '2026-03-20',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson("/api/meetings/{$meeting->id}/tasks", [
+                'tasks' => [],
+            ]);
+
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors(['tasks']);
+    }
+
+    public function test_batch_tasks_require_assignment_target(): void
+    {
+        $meeting = Meeting::create([
+            'title' => 'Reunión',
+            'meeting_date' => '2026-03-20',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson("/api/meetings/{$meeting->id}/tasks", [
+                'tasks' => [
+                    ['title' => 'Sin destino'],
+                ],
+            ]);
+
+        $response->assertUnprocessable();
+    }
+
+    public function test_batch_tasks_generates_status_history(): void
+    {
+        AreaMember::create([
+            'area_id' => $this->area->id,
+            'user_id' => $this->worker->id,
+            'is_active' => true,
+            'joined_at' => now(),
+        ]);
+
+        $meeting = Meeting::create([
+            'title' => 'Reunión historial',
+            'meeting_date' => '2026-03-20',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $this->actingAs($this->admin, 'sanctum')
+            ->postJson("/api/meetings/{$meeting->id}/tasks", [
+                'tasks' => [
+                    ['title' => 'Tarea con historial', 'assigned_to_user_id' => $this->worker->id],
+                ],
+            ]);
+
+        $this->assertDatabaseHas('task_status_history', [
+            'note' => 'Tarea creada',
+        ]);
+    }
 }

@@ -36,6 +36,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Meetings
     Route::apiResource('meetings', MeetingController::class);
+    Route::post('/meetings/{meeting}/tasks', [MeetingController::class, 'storeTasks']);
 
     // Tasks
     Route::apiResource('tasks', TaskController::class);
