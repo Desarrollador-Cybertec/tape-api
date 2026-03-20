@@ -53,6 +53,11 @@ class TaskPolicy
             return true;
         }
 
+        // Workers can edit their own personal tasks (no area)
+        if (is_null($task->area_id) && $task->created_by === $user->id) {
+            return true;
+        }
+
         return false;
     }
 
@@ -128,7 +133,12 @@ class TaskPolicy
 
     public function delete(User $user, Task $task): bool
     {
-        return $user->isSuperAdmin();
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        // Workers can delete their own personal tasks (no area)
+        return is_null($task->area_id) && $task->created_by === $user->id;
     }
 
     public function comment(User $user, Task $task): bool
