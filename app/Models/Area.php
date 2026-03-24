@@ -41,6 +41,12 @@ class Area extends Model
         return $this->members()->wherePivot('is_active', true);
     }
 
+    public function activeWorkers(): BelongsToMany
+    {
+        return $this->activeMembers()
+            ->whereHas('role', fn ($q) => $q->where('slug', \App\Enums\RoleEnum::WORKER->value));
+    }
+
     public function tasks(): HasMany
     {
         return $this->hasMany(Task::class, 'area_id');

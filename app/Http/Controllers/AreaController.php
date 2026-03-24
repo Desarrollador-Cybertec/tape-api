@@ -23,7 +23,7 @@ class AreaController extends Controller
         $user = $request->user();
 
         $areas = Area::with('manager')
-            ->withCount('activeMembers')
+            ->withCount('activeWorkers')
             ->when($user->isWorker(), function ($q) use ($user) {
                 $q->where(function ($query) use ($user) {
                     $query->where('manager_user_id', $user->id)
@@ -55,7 +55,7 @@ class AreaController extends Controller
 
         return new AreaResource(
             $area->load(['manager', 'activeMembers.role'])
-                ->loadCount('activeMembers')
+                ->loadCount('activeWorkers')
         );
     }
 
