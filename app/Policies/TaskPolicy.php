@@ -72,7 +72,12 @@ class TaskPolicy
             return !$this->isForeignPersonalTask($user, $task);
         }
 
-        return $task->area_id && $user->isManagerOfArea($task->area_id);
+        if (!$task->area_id) {
+            return false;
+        }
+
+        return $user->isManagerOfArea($task->area_id)
+            || ($user->isAreaManager() && $task->current_responsible_user_id === $user->id);
     }
 
     public function start(User $user, Task $task): bool
