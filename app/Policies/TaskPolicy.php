@@ -14,10 +14,15 @@ class TaskPolicy
         return true;
     }
 
+    private function isForeignPersonalTask(User $user, Task $task): bool
+    {
+        return is_null($task->area_id) && $task->created_by !== $user->id;
+    }
+
     public function view(User $user, Task $task): bool
     {
         if ($user->isSuperAdmin()) {
-            return true;
+            return !$this->isForeignPersonalTask($user, $task);
         }
 
         if ($task->created_by === $user->id
@@ -46,7 +51,7 @@ class TaskPolicy
     public function update(User $user, Task $task): bool
     {
         if ($user->isSuperAdmin()) {
-            return true;
+            return !$this->isForeignPersonalTask($user, $task);
         }
 
         if ($task->area_id && $user->isManagerOfArea($task->area_id)) {
@@ -64,7 +69,7 @@ class TaskPolicy
     public function delegate(User $user, Task $task): bool
     {
         if ($user->isSuperAdmin()) {
-            return true;
+            return !$this->isForeignPersonalTask($user, $task);
         }
 
         return $task->area_id && $user->isManagerOfArea($task->area_id);
@@ -83,7 +88,7 @@ class TaskPolicy
     public function approve(User $user, Task $task): bool
     {
         if ($user->isSuperAdmin()) {
-            return true;
+            return !$this->isForeignPersonalTask($user, $task);
         }
 
         return $task->area_id && $user->isManagerOfArea($task->area_id);
@@ -92,7 +97,7 @@ class TaskPolicy
     public function reject(User $user, Task $task): bool
     {
         if ($user->isSuperAdmin()) {
-            return true;
+            return !$this->isForeignPersonalTask($user, $task);
         }
 
         return $task->area_id && $user->isManagerOfArea($task->area_id);
@@ -101,7 +106,7 @@ class TaskPolicy
     public function cancel(User $user, Task $task): bool
     {
         if ($user->isSuperAdmin()) {
-            return true;
+            return !$this->isForeignPersonalTask($user, $task);
         }
 
         return $task->created_by === $user->id;
@@ -110,7 +115,7 @@ class TaskPolicy
     public function reopen(User $user, Task $task): bool
     {
         if ($user->isSuperAdmin()) {
-            return true;
+            return !$this->isForeignPersonalTask($user, $task);
         }
 
         if ($task->area_id && $user->isManagerOfArea($task->area_id)) {
@@ -125,7 +130,7 @@ class TaskPolicy
     public function claim(User $user, Task $task): bool
     {
         if ($user->isSuperAdmin()) {
-            return true;
+            return !$this->isForeignPersonalTask($user, $task);
         }
 
         return $task->area_id && $user->isManagerOfArea($task->area_id);
@@ -134,7 +139,7 @@ class TaskPolicy
     public function delete(User $user, Task $task): bool
     {
         if ($user->isSuperAdmin()) {
-            return true;
+            return !$this->isForeignPersonalTask($user, $task);
         }
 
         // Workers can delete their own personal tasks (no area)

@@ -40,6 +40,13 @@ class TaskController extends Controller
 
         $tasks = Task::with(['creator', 'currentResponsible', 'area', 'latestUpdate'])
             ->withCount(['comments', 'attachments'])
+            ->when($user->isSuperAdmin(), function ($q) use ($user) {
+                // Superadmin sees all organization tasks + their own personal tasks
+                $q->where(function ($query) use ($user) {
+                    $query->whereNotNull('area_id')
+                          ->orWhere('created_by', $user->id);
+                });
+            })
             ->when(!$user->isSuperAdmin(), function ($q) use ($user) {
                 $q->where(function ($query) use ($user) {
                     $query->where('created_by', $user->id)
