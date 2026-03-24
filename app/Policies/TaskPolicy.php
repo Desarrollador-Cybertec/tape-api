@@ -96,7 +96,9 @@ class TaskPolicy
         return $user->isManagerOfArea($task->area_id)
             || ($user->isAreaManager() && $task->current_responsible_user_id === $user->id)
             // Cross-area: allow if the current responsible belongs to one of the manager's areas
-            || $this->isManagerOfUserArea($user, $task->current_responsible_user_id);
+            || $this->isManagerOfUserArea($user, $task->current_responsible_user_id)
+            // Creator of the task can delegate it
+            || ($user->isAreaManager() && $task->created_by === $user->id);
     }
 
     public function start(User $user, Task $task): bool
@@ -162,7 +164,12 @@ class TaskPolicy
         }
 
         // Cross-area: allow if the assigned user belongs to one of the manager's areas
-        return $this->isManagerOfUserArea($user, $task->assigned_to_user_id);
+        if ($this->isManagerOfUserArea($user, $task->assigned_to_user_id)) {
+            return true;
+        }
+
+        // Creator of the task can claim it
+        return $user->isAreaManager() && $task->created_by === $user->id;
     }
 
     public function delete(User $user, Task $task): bool
