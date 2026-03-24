@@ -8,7 +8,18 @@ class ClaimWorkerRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()->isSuperAdmin() || $this->user()->isAreaManager();
+        if ($this->user()->isSuperAdmin()) {
+            return true;
+        }
+
+        if (!$this->user()->isAreaManager()) {
+            return false;
+        }
+
+        // Area managers can only claim workers for areas they manage
+        return $this->user()->managedAreas()
+            ->where('areas.id', $this->input('area_id'))
+            ->exists();
     }
 
     public function rules(): array
