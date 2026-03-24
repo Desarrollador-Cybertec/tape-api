@@ -49,11 +49,23 @@ class TaskController extends Controller
             })
             ->when(!$user->isSuperAdmin(), function ($q) use ($user) {
                 $q->where(function ($query) use ($user) {
-                    $query->where('created_by', $user->id)
-                        ->orWhere('assigned_to_user_id', $user->id)
-                        ->orWhere('current_responsible_user_id', $user->id);
+                    // 1. Personal tasks created by the user (no area)
+                    $query->where(function ($q) use ($user) {
+                        $q->whereNull('area_id')->where('created_by', $user->id);
+                    });
+
+                    // 2. Area tasks where user is currently responsible AND task is still active
+                    $terminalStatuses = [
+                        \App\Enums\TaskStatusEnum::COMPLETED->value,
+                        \App\Enums\TaskStatusEnum::CANCELLED->value,
+                    ];
+                    $query->orWhere(function ($q) use ($user, $terminalStatuses) {
+                        $q->where('current_responsible_user_id', $user->id)
+                          ->whereNotIn('status', $terminalStatuses);
+                    });
 
                     if ($user->isAreaManager()) {
+                        // 3. Non-worker-created tasks in areas the manager currently manages
                         $workerIds = \App\Models\User::whereHas('role', fn ($r) =>
                             $r->where('slug', \App\Enums\RoleEnum::WORKER->value)
                         )->select('id');

@@ -42,14 +42,23 @@ class TaskPolicy
             return !$this->isForeignPersonalTask($user, $task);
         }
 
-        if ($task->created_by === $user->id
-            || $task->assigned_to_user_id === $user->id
-            || $task->current_responsible_user_id === $user->id) {
+        // Personal task: only the creator can see it
+        if (is_null($task->area_id)) {
+            return $task->created_by === $user->id;
+        }
+
+        // Area task: user is currently responsible AND task is still active
+        $terminalStatuses = [
+            \App\Enums\TaskStatusEnum::COMPLETED->value,
+            \App\Enums\TaskStatusEnum::CANCELLED->value,
+        ];
+        if ($task->current_responsible_user_id === $user->id
+            && !in_array($task->status->value, $terminalStatuses)) {
             return true;
         }
 
-        if ($task->area_id && $user->isManagerOfArea($task->area_id)) {
-            // Workers' self-created tasks are personal and not visible to area managers
+        // Area task: user currently manages this area (worker-created tasks are personal so have no area_id)
+        if ($user->isManagerOfArea($task->area_id)) {
             return !DB::table('users')
                 ->join('roles', 'users.role_id', '=', 'roles.id')
                 ->where('users.id', $task->created_by)

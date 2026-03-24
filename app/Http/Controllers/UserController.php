@@ -71,7 +71,25 @@ class UserController extends Controller
             'role_id' => ['required', 'exists:roles,id'],
         ]);
 
-        $user->update(['role_id' => $request->role_id]);
+        $newRole = \App\Models\Role::find($request->role_id);
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($user, $request, $newRole) {
+            $user->update(['role_id' => $request->role_id]);
+
+            // When promoting to area_manager, remove active worker memberships
+            if ($newRole?->slug === \App\Enums\RoleEnum::AREA_MANAGER->value) {
+                \App\Models\AreaMember::where('user_id', $user->id)
+                    ->where('is_active', true)
+                    ->update(['is_active' => false, 'left_at' => now()]);
+            }
+
+            // When demoting from area_manager to worker, remove them as manager from areas
+            if ($user->role?->slug === \App\Enums\RoleEnum::AREA_MANAGER->value
+                && $newRole?->slug === \App\Enums\RoleEnum::WORKER->value) {
+                \App\Models\Area::where('manager_user_id', $user->id)
+                    ->update(['manager_user_id' => null]);
+            }
+        });
 
         return new UserResource($user->fresh(['role', 'activeAreas']));
     }
