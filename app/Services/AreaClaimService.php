@@ -30,9 +30,17 @@ class AreaClaimService
                 ->first();
 
             if ($existingMembership) {
-                throw ValidationException::withMessages([
-                    'user_id' => ['El trabajador ya pertenece a un área activa.'],
-                ]);
+                // Superadmin can reassign: deactivate the current membership first
+                if ($claimedBy->isSuperAdmin()) {
+                    $existingMembership->update([
+                        'is_active' => false,
+                        'left_at' => now(),
+                    ]);
+                } else {
+                    throw ValidationException::withMessages([
+                        'user_id' => ['El trabajador ya pertenece a un área activa.'],
+                    ]);
+                }
             }
 
             // Validate the claimer has authority over this area
