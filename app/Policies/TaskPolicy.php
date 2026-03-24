@@ -19,6 +19,23 @@ class TaskPolicy
         return is_null($task->area_id) && $task->created_by !== $user->id;
     }
 
+    /**
+     * Returns true if $manager manages the active area of the given user.
+     * Used for cross-area task scenarios (e.g. Ventas assigns a task to a Desarrollo worker).
+     */
+    private function isManagerOfUserArea(User $manager, ?int $userId): bool
+    {
+        if (!$userId) {
+            return false;
+        }
+        return DB::table('area_members')
+            ->join('areas', 'area_members.area_id', '=', 'areas.id')
+            ->where('area_members.user_id', $userId)
+            ->where('area_members.is_active', true)
+            ->where('areas.manager_user_id', $manager->id)
+            ->exists();
+    }
+
     public function view(User $user, Task $task): bool
     {
         if ($user->isSuperAdmin()) {
@@ -77,7 +94,9 @@ class TaskPolicy
         }
 
         return $user->isManagerOfArea($task->area_id)
-            || ($user->isAreaManager() && $task->current_responsible_user_id === $user->id);
+            || ($user->isAreaManager() && $task->current_responsible_user_id === $user->id)
+            // Cross-area: allow if the current responsible belongs to one of the manager's areas
+            || $this->isManagerOfUserArea($user, $task->current_responsible_user_id);
     }
 
     public function start(User $user, Task $task): bool
@@ -138,7 +157,12 @@ class TaskPolicy
             return !$this->isForeignPersonalTask($user, $task);
         }
 
-        return $task->area_id && $user->isManagerOfArea($task->area_id);
+        if ($task->area_id && $user->isManagerOfArea($task->area_id)) {
+            return true;
+        }
+
+        // Cross-area: allow if the assigned user belongs to one of the manager's areas
+        return $this->isManagerOfUserArea($user, $task->assigned_to_user_id);
     }
 
     public function delete(User $user, Task $task): bool
