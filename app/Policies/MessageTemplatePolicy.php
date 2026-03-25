@@ -17,7 +17,17 @@ class MessageTemplatePolicy
         return $user->isSuperAdmin();
     }
 
+    public function create(User $user): bool
+    {
+        return $user->isSuperAdmin();
+    }
+
     public function update(User $user, MessageTemplate $messageTemplate): bool
+    {
+        return $user->isSuperAdmin();
+    }
+
+    public function delete(User $user, MessageTemplate $messageTemplate): bool
     {
         return $user->isSuperAdmin();
     }

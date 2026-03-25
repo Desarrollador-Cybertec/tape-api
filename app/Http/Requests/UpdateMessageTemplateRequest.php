@@ -8,7 +8,7 @@ class UpdateMessageTemplateRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()->isSuperAdmin();
+        return $this->user()->can('update', $this->route('messageTemplate'));
     }
 
     public function rules(): array

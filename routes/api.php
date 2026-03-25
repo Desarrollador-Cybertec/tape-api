@@ -60,12 +60,16 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ── Configuration (superadmin) ──
     Route::get('/settings', [SystemSettingController::class, 'index']);
+    Route::post('/settings', [SystemSettingController::class, 'store']);
     Route::put('/settings', [SystemSettingController::class, 'update']);
+    Route::delete('/settings/{systemSetting}', [SystemSettingController::class, 'destroy']);
 
     // Message Templates (superadmin)
     Route::get('/message-templates', [MessageTemplateController::class, 'index']);
+    Route::post('/message-templates', [MessageTemplateController::class, 'store']);
     Route::get('/message-templates/{messageTemplate}', [MessageTemplateController::class, 'show']);
     Route::put('/message-templates/{messageTemplate}', [MessageTemplateController::class, 'update']);
+    Route::delete('/message-templates/{messageTemplate}', [MessageTemplateController::class, 'destroy']);
 
     // Automation triggers (superadmin)
     Route::post('/automation/detect-overdue', [AutomationController::class, 'triggerOverdueDetection']);

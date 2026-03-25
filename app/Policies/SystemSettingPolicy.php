@@ -12,7 +12,17 @@ class SystemSettingPolicy
         return $user->isSuperAdmin();
     }
 
+    public function create(User $user): bool
+    {
+        return $user->isSuperAdmin();
+    }
+
     public function update(User $user): bool
+    {
+        return $user->isSuperAdmin();
+    }
+
+    public function delete(User $user, SystemSetting $systemSetting): bool
     {
         return $user->isSuperAdmin();
     }

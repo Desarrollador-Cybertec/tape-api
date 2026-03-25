@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreSystemSettingRequest;
 use App\Http\Requests\UpdateSystemSettingsRequest;
 use App\Http\Resources\SystemSettingResource;
 use App\Models\SystemSetting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 
 class SystemSettingController extends Controller
 {
@@ -34,6 +36,30 @@ class SystemSettingController extends Controller
     }
 
     /**
+     * Create a new setting key.
+     */
+    public function store(StoreSystemSettingRequest $request): JsonResponse
+    {
+        $setting = SystemSetting::create($request->validated());
+
+        return (new SystemSettingResource($setting))
+            ->response()
+            ->setStatusCode(201);
+    }
+
+    /**
+     * Delete a setting key.
+     */
+    public function destroy(SystemSetting $systemSetting): Response
+    {
+        $this->authorize('delete', $systemSetting);
+
+        $systemSetting->delete();
+
+        return response()->noContent();
+    }
+
+    /**
      * Bulk update settings.
      */
     public function update(UpdateSystemSettingsRequest $request): JsonResponse
@@ -42,6 +68,16 @@ class SystemSettingController extends Controller
             SystemSetting::setValue($item['key'], $item['value']);
         }
 
-        return response()->json(['message' => 'Configuración actualizada correctamente']);
+        // Return fresh grouped settings so the client can update its state
+        $settings = SystemSetting::query()->orderBy('group')->orderBy('key')->get();
+
+        $grouped = $settings->groupBy('group')->map(
+            fn ($items) => SystemSettingResource::collection($items)
+        );
+
+        return response()->json([
+            'message' => 'Configuración actualizada correctamente',
+            'data'    => $grouped,
+        ]);
     }
 }
