@@ -5,8 +5,8 @@ namespace App\Console\Commands;
 use App\Enums\TaskStatusEnum;
 use App\Models\SystemSetting;
 use App\Models\Task;
-use App\Models\TaskNotification;
 use App\Models\User;
+use App\Notifications\DailyTaskSummaryNotification;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 
@@ -52,15 +52,12 @@ class SendDailyTaskSummary extends Command
 
             $message = $this->buildSummaryMessage($user, $tasks, $overdue, $dueSoon, $alertDays);
 
-            TaskNotification::create([
-                'task_id' => $tasks->first()->id,
-                'triggered_by' => $user->id,
-                'notify_to_user_id' => $user->id,
-                'channel' => 'database',
-                'message' => $message,
-                'sent_at' => now(),
-                'status' => 'sent',
-            ]);
+            $user->notify(new DailyTaskSummaryNotification(
+                summaryContent: $message,
+                totalPending: $tasks->count(),
+                overdueCount: $overdue->count(),
+                dueSoonCount: $dueSoon->count(),
+            ));
 
             $count++;
         }

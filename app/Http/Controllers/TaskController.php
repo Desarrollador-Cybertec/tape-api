@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\AttachmentTypeEnum;
+use App\Events\TaskCommentAdded;
 use App\Http\Requests\ApproveTaskRequest;
 use App\Http\Requests\DelegateTaskRequest;
 use App\Http\Requests\RejectTaskRequest;
@@ -260,6 +261,8 @@ class TaskController extends Controller
             'comment' => $request->comment,
             'type' => $request->type ?? 'comment',
         ]);
+
+        event(new TaskCommentAdded($task, $comment, $request->user()));
 
         return response()->json(
             new TaskCommentResource($comment->load('user')),

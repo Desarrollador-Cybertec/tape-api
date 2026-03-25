@@ -7,6 +7,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\MessageTemplateController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\SystemSettingController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\UserController;
@@ -79,4 +80,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Import (superadmin)
     Route::post('/import/tasks', [ImportController::class, 'importTasks']);
+
+    // Notifications
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::patch('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
 });

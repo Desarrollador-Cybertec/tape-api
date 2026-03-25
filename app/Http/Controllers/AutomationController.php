@@ -6,8 +6,12 @@ use App\Enums\TaskStatusEnum;
 use App\Models\ActivityLog;
 use App\Models\SystemSetting;
 use App\Models\Task;
-use App\Models\TaskNotification;
 use App\Models\TaskStatusHistory;
+use App\Models\User;
+use App\Notifications\DailyTaskSummaryNotification;
+use App\Notifications\TaskDueSoonNotification;
+use App\Notifications\TaskInactivityNotification;
+use App\Notifications\TaskOverdueNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -151,15 +155,12 @@ class AutomationController extends Controller
                     $lines[] = "Sin avance reportado: {$withoutUpdates->count()}";
                 }
 
-                TaskNotification::create([
-                    'task_id' => $tasks->first()->id,
-                    'triggered_by' => $user->id,
-                    'notify_to_user_id' => $responsible->id,
-                    'channel' => 'database',
-                    'message' => implode("\n", $lines),
-                    'sent_at' => now(),
-                    'status' => 'sent',
-                ]);
+                $responsible->notify(new DailyTaskSummaryNotification(
+                    summaryContent: implode("\n", $lines),
+                    totalPending: $tasks->count(),
+                    overdueCount: $overdue->count(),
+                    dueSoonCount: $dueSoon->count(),
+                ));
                 $count++;
             }
 
@@ -211,20 +212,11 @@ class AutomationController extends Controller
                 ->get();
 
             foreach ($dueSoon as $task) {
-                $daysLeft = now()->startOfDay()->diffInDays($task->due_date, false);
-                $message = $daysLeft === 0
-                    ? "La tarea \"{$task->title}\" vence hoy."
-                    : "La tarea \"{$task->title}\" vence en {$daysLeft} día(s).";
+                $responsible = User::find($task->current_responsible_user_id);
+                if (!$responsible) continue;
 
-                TaskNotification::create([
-                    'task_id' => $task->id,
-                    'triggered_by' => $user->id,
-                    'notify_to_user_id' => $task->current_responsible_user_id,
-                    'channel' => 'database',
-                    'message' => $message,
-                    'sent_at' => now(),
-                    'status' => 'sent',
-                ]);
+                $daysLeft = (int) now()->startOfDay()->diffInDays($task->due_date, false);
+                $responsible->notify(new TaskDueSoonNotification($task, $daysLeft));
                 $count++;
             }
 
@@ -237,16 +229,11 @@ class AutomationController extends Controller
                 ->get();
 
             foreach ($overdue as $task) {
-                $daysOverdue = $task->due_date->diffInDays(now());
-                TaskNotification::create([
-                    'task_id' => $task->id,
-                    'triggered_by' => $user->id,
-                    'notify_to_user_id' => $task->current_responsible_user_id,
-                    'channel' => 'database',
-                    'message' => "La tarea \"{$task->title}\" está vencida por {$daysOverdue} día(s).",
-                    'sent_at' => now(),
-                    'status' => 'sent',
-                ]);
+                $responsible = User::find($task->current_responsible_user_id);
+                if (!$responsible) continue;
+
+                $daysOverdue = (int) $task->due_date->diffInDays(now());
+                $responsible->notify(new TaskOverdueNotification($task, $daysOverdue));
                 $count++;
             }
 
@@ -310,25 +297,24 @@ class AutomationController extends Controller
             $count = 0;
 
             foreach ($grouped as $userId => $tasks) {
-                $lines = ["Tienes {$tasks->count()} tarea(s) sin avance en los últimos {$inactivityDays} días:", ''];
-                foreach ($tasks as $task) {
+                $responsible = User::find($userId);
+                if (!$responsible) continue;
+
+                $taskData = $tasks->map(function ($task) {
                     $lastUpdate = $task->latestUpdate;
                     $daysSince = $lastUpdate
                         ? (int) $lastUpdate->created_at->diffInDays(now())
                         : (int) $task->created_at->diffInDays(now());
-                    $due = $task->due_date ? $task->due_date->toDateString() : 'Sin fecha';
-                    $lines[] = "- {$task->title} ({$daysSince} días sin avance, Vence: {$due})";
-                }
 
-                TaskNotification::create([
-                    'task_id' => $tasks->first()->id,
-                    'triggered_by' => $user->id,
-                    'notify_to_user_id' => $userId,
-                    'channel' => 'database',
-                    'message' => implode("\n", $lines),
-                    'sent_at' => now(),
-                    'status' => 'sent',
-                ]);
+                    return [
+                        'task_id' => $task->id,
+                        'task_title' => $task->title,
+                        'days_inactive' => $daysSince,
+                        'due_date' => $task->due_date?->toDateString(),
+                    ];
+                });
+
+                $responsible->notify(new TaskInactivityNotification($taskData, $inactivityDays));
                 $count++;
             }
 

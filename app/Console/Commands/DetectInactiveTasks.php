@@ -5,7 +5,8 @@ namespace App\Console\Commands;
 use App\Enums\TaskStatusEnum;
 use App\Models\SystemSetting;
 use App\Models\Task;
-use App\Models\TaskNotification;
+use App\Models\User;
+use App\Notifications\TaskInactivityNotification;
 use Illuminate\Console\Command;
 
 class DetectInactiveTasks extends Command
@@ -48,31 +49,24 @@ class DetectInactiveTasks extends Command
         $count = 0;
 
         foreach ($grouped as $userId => $tasks) {
-            $lines = ["Tienes {$tasks->count()} tarea(s) sin avance reportado en los últimos {$inactivityDays} días:"];
-            $lines[] = '';
+            $user = User::find($userId);
+            if (!$user) continue;
 
-            foreach ($tasks as $task) {
+            $taskData = $tasks->map(function (Task $task) {
                 $lastUpdate = $task->latestUpdate;
                 $daysSince = $lastUpdate
                     ? (int) $lastUpdate->created_at->diffInDays(now())
                     : (int) $task->created_at->diffInDays(now());
 
-                /** @var \Illuminate\Support\Carbon|null $dueDate */
-                $dueDate = $task->due_date;
-                $due = $dueDate ? $dueDate->toDateString() : 'Sin fecha';
-                $lines[] = "- {$task->title} ({$daysSince} días sin avance, Vence: {$due})";
-            }
+                return [
+                    'task_id' => $task->id,
+                    'task_title' => $task->title,
+                    'days_inactive' => $daysSince,
+                    'due_date' => $task->due_date?->toDateString(),
+                ];
+            });
 
-            TaskNotification::create([
-                'task_id' => $tasks->first()->id,
-                'triggered_by' => $tasks->first()->created_by,
-                'notify_to_user_id' => $userId,
-                'channel' => 'database',
-                'message' => implode("\n", $lines),
-                'sent_at' => now(),
-                'status' => 'sent',
-            ]);
-
+            $user->notify(new TaskInactivityNotification($taskData, $inactivityDays));
             $count++;
         }
 

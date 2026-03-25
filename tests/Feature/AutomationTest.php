@@ -8,7 +8,6 @@ use App\Models\Area;
 use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Models\Task;
-use App\Models\TaskNotification;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -325,8 +324,9 @@ class AutomationTest extends TestCase
         $response->assertOk()
             ->assertJsonFragment(['message' => 'Resumen diario enviado correctamente']);
 
-        $this->assertDatabaseHas('task_notifications', [
-            'notify_to_user_id' => $this->worker->id,
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $this->worker->id,
+            'notifiable_type' => User::class,
         ]);
     }
 
@@ -348,8 +348,9 @@ class AutomationTest extends TestCase
         $response->assertOk()
             ->assertJsonFragment(['message' => 'Recordatorios enviados correctamente']);
 
-        $this->assertDatabaseHas('task_notifications', [
-            'notify_to_user_id' => $this->worker->id,
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $this->worker->id,
+            'notifiable_type' => User::class,
         ]);
     }
 
@@ -375,8 +376,9 @@ class AutomationTest extends TestCase
             ->postJson('/api/automation/send-reminders')
             ->assertOk();
 
-        $this->assertDatabaseMissing('task_notifications', [
-            'notify_to_user_id' => $this->worker->id,
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $this->worker->id,
+            'notifiable_type' => User::class,
         ]);
     }
 
@@ -401,8 +403,9 @@ class AutomationTest extends TestCase
         $response->assertOk()
             ->assertJsonFragment(['message' => 'Detección de inactividad ejecutada correctamente']);
 
-        $this->assertDatabaseHas('task_notifications', [
-            'notify_to_user_id' => $this->worker->id,
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $this->worker->id,
+            'notifiable_type' => User::class,
         ]);
     }
 }

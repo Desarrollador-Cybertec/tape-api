@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\TaskStatusEnum;
+use App\Events\TaskDelegated;
 use App\Models\ActivityLog;
 use App\Models\Task;
 use App\Models\TaskDelegation;
@@ -76,6 +77,9 @@ class TaskDelegationService
             ]);
 
             $task->refresh();
+
+            event(new TaskDelegated($task, $fromUser, $toUser));
+
             return $task;
         });
     }

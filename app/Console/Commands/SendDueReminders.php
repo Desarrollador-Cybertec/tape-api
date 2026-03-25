@@ -5,7 +5,9 @@ namespace App\Console\Commands;
 use App\Enums\TaskStatusEnum;
 use App\Models\SystemSetting;
 use App\Models\Task;
-use App\Models\TaskNotification;
+use App\Models\User;
+use App\Notifications\TaskDueSoonNotification;
+use App\Notifications\TaskOverdueNotification;
 use Illuminate\Console\Command;
 
 class SendDueReminders extends Command
@@ -37,21 +39,11 @@ class SendDueReminders extends Command
             ->get();
 
         foreach ($dueSoon as $task) {
-            $daysLeft = now()->startOfDay()->diffInDays($task->due_date, false);
-            $message = $daysLeft === 0
-                ? "La tarea \"{$task->title}\" vence hoy."
-                : "La tarea \"{$task->title}\" vence en {$daysLeft} día(s).";
+            $user = User::find($task->current_responsible_user_id);
+            if (!$user) continue;
 
-            TaskNotification::create([
-                'task_id' => $task->id,
-                'triggered_by' => $task->created_by,
-                'notify_to_user_id' => $task->current_responsible_user_id,
-                'channel' => 'database',
-                'message' => $message,
-                'sent_at' => now(),
-                'status' => 'sent',
-            ]);
-
+            $daysLeft = (int) now()->startOfDay()->diffInDays($task->due_date, false);
+            $user->notify(new TaskDueSoonNotification($task, $daysLeft));
             $count++;
         }
 
@@ -67,18 +59,11 @@ class SendDueReminders extends Command
             ->get();
 
         foreach ($overdue as $task) {
-            $daysOverdue = $task->due_date->diffInDays(now());
+            $user = User::find($task->current_responsible_user_id);
+            if (!$user) continue;
 
-            TaskNotification::create([
-                'task_id' => $task->id,
-                'triggered_by' => $task->created_by,
-                'notify_to_user_id' => $task->current_responsible_user_id,
-                'channel' => 'database',
-                'message' => "La tarea \"{$task->title}\" está vencida por {$daysOverdue} día(s).",
-                'sent_at' => now(),
-                'status' => 'sent',
-            ]);
-
+            $daysOverdue = (int) $task->due_date->diffInDays(now());
+            $user->notify(new TaskOverdueNotification($task, $daysOverdue));
             $count++;
         }
 

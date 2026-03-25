@@ -53,9 +53,9 @@ class InactivityDetectionTest extends TestCase
 
         Artisan::call('tasks:detect-inactive');
 
-        $this->assertDatabaseHas('task_notifications', [
-            'notify_to_user_id' => $this->worker->id,
-            'status' => 'sent',
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $this->worker->id,
+            'notifiable_type' => User::class,
         ]);
     }
 
@@ -80,7 +80,7 @@ class InactivityDetectionTest extends TestCase
 
         Artisan::call('tasks:detect-inactive');
 
-        $this->assertDatabaseCount('task_notifications', 0);
+        $this->assertDatabaseCount('notifications', 0);
     }
 
     public function test_detect_inactive_alerts_tasks_with_old_updates(): void
@@ -104,9 +104,9 @@ class InactivityDetectionTest extends TestCase
 
         Artisan::call('tasks:detect-inactive');
 
-        $this->assertDatabaseHas('task_notifications', [
-            'notify_to_user_id' => $this->worker->id,
-            'status' => 'sent',
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $this->worker->id,
+            'notifiable_type' => User::class,
         ]);
     }
 
@@ -123,7 +123,7 @@ class InactivityDetectionTest extends TestCase
 
         Artisan::call('tasks:detect-inactive');
 
-        $this->assertDatabaseCount('task_notifications', 0);
+        $this->assertDatabaseCount('notifications', 0);
     }
 
     public function test_detect_inactive_creates_consolidated_notification(): void
@@ -146,11 +146,11 @@ class InactivityDetectionTest extends TestCase
 
         Artisan::call('tasks:detect-inactive');
 
-        // Should create ONE notification for both tasks
-        $notifications = \App\Models\TaskNotification::where('notify_to_user_id', $this->worker->id)->get();
+        // Should create ONE notification for both tasks (consolidated per user)
+        $notifications = $this->worker->notifications;
         $this->assertCount(1, $notifications);
-        $this->assertStringContainsString('Inactiva 1', $notifications->first()->message);
-        $this->assertStringContainsString('Inactiva 2', $notifications->first()->message);
+        $data = $notifications->first()->data;
+        $this->assertEquals(2, $data['task_count']);
     }
 
     public function test_detect_inactive_respects_enabled_setting(): void
@@ -174,7 +174,7 @@ class InactivityDetectionTest extends TestCase
             ->expectsOutput('Alertas por inactividad desactivadas.')
             ->assertSuccessful();
 
-        $this->assertDatabaseCount('task_notifications', 0);
+        $this->assertDatabaseCount('notifications', 0);
     }
 
     public function test_detect_inactive_respects_custom_days_setting(): void
@@ -197,7 +197,7 @@ class InactivityDetectionTest extends TestCase
 
         Artisan::call('tasks:detect-inactive');
 
-        $this->assertDatabaseCount('task_notifications', 0);
+        $this->assertDatabaseCount('notifications', 0);
     }
 
     public function test_superadmin_can_trigger_inactivity_detection(): void

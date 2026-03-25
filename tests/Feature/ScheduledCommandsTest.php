@@ -6,11 +6,13 @@ use App\Enums\RoleEnum;
 use App\Enums\TaskStatusEnum;
 use App\Models\Area;
 use App\Models\Role;
+use App\Models\SystemSetting;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class ScheduledCommandsTest extends TestCase
@@ -36,6 +38,14 @@ class ScheduledCommandsTest extends TestCase
             'role_id' => $workerRole->id,
             'password' => Hash::make('Password1'),
         ]);
+
+        SystemSetting::create(['key' => 'emails_enabled', 'value' => '1', 'type' => 'boolean', 'group' => 'notifications']);
+        SystemSetting::create(['key' => 'daily_summary_enabled', 'value' => '1', 'type' => 'boolean', 'group' => 'notifications']);
+        SystemSetting::create(['key' => 'detect_overdue_enabled', 'value' => '1', 'type' => 'boolean', 'group' => 'automation']);
+        SystemSetting::create(['key' => 'alert_days_before_due', 'value' => '3', 'type' => 'integer', 'group' => 'notifications']);
+        SystemSetting::create(['key' => 'inactivity_alert_enabled', 'value' => '1', 'type' => 'boolean', 'group' => 'automation']);
+        SystemSetting::create(['key' => 'inactivity_alert_days', 'value' => '7', 'type' => 'integer', 'group' => 'automation']);
+        SystemSetting::create(['key' => 'notification_email_enabled', 'value' => '0', 'type' => 'boolean', 'group' => 'notifications']);
     }
 
     public function test_detect_overdue_marks_past_due_tasks(): void
@@ -104,9 +114,9 @@ class ScheduledCommandsTest extends TestCase
 
         Artisan::call('tasks:send-daily-summary');
 
-        $this->assertDatabaseHas('task_notifications', [
-            'notify_to_user_id' => $this->worker->id,
-            'status' => 'sent',
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $this->worker->id,
+            'notifiable_type' => User::class,
         ]);
     }
 
@@ -123,8 +133,9 @@ class ScheduledCommandsTest extends TestCase
 
         Artisan::call('tasks:send-due-reminders');
 
-        $this->assertDatabaseHas('task_notifications', [
-            'notify_to_user_id' => $this->worker->id,
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $this->worker->id,
+            'notifiable_type' => User::class,
         ]);
     }
 
@@ -141,6 +152,6 @@ class ScheduledCommandsTest extends TestCase
 
         Artisan::call('tasks:send-due-reminders');
 
-        $this->assertDatabaseCount('task_notifications', 0);
+        $this->assertDatabaseCount('notifications', 0);
     }
 }

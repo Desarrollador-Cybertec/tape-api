@@ -634,6 +634,7 @@ class TaskTest extends TestCase
             'title' => 'Comentar',
             'created_by' => $this->admin->id,
             'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
             'status' => TaskStatusEnum::IN_PROGRESS,
         ]);
 
@@ -660,6 +661,7 @@ class TaskTest extends TestCase
             'title' => 'Adjuntar',
             'created_by' => $this->admin->id,
             'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
             'status' => TaskStatusEnum::IN_PROGRESS,
         ]);
 

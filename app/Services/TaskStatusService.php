@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\TaskStatusEnum;
+use App\Events\TaskStatusChanged;
 use App\Models\ActivityLog;
 use App\Models\Task;
 use App\Models\TaskStatusHistory;
@@ -58,6 +59,9 @@ class TaskStatusService
             ]);
 
             $task->refresh();
+
+            event(new TaskStatusChanged($task, $oldStatus->value, $newStatus->value, $changedBy, $note));
+
             return $task;
         });
     }

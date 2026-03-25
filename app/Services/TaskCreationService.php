@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\TaskStatusEnum;
+use App\Events\TaskAssigned;
 use App\Mail\ExternalTaskMail;
 use App\Models\ActivityLog;
 use App\Models\Task;
@@ -106,6 +107,11 @@ class TaskCreationService
             // Send email to external recipient
             if ($isExternalTask) {
                 Mail::to($data['external_email'])->queue(new ExternalTaskMail($task));
+            }
+
+            // Dispatch event for assigned user notification
+            if ($task->current_responsible_user_id) {
+                event(new TaskAssigned($task, $creator));
             }
 
             return $task;
