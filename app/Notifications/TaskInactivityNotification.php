@@ -31,6 +31,7 @@ class TaskInactivityNotification extends Notification implements ShouldQueue
     {
         return [
             'type' => 'inactivity_alert',
+            'category' => 'summary',
             'inactivity_days' => $this->inactivityDays,
             'task_count' => $this->inactiveTasks->count(),
             'tasks' => $this->inactiveTasks->toArray(),

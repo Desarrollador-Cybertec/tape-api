@@ -32,6 +32,7 @@ class TaskDueSoonNotification extends Notification implements ShouldQueue
 
         return [
             'type' => 'task_due_soon',
+            'category' => $this->task->area_id ? 'organizational' : 'personal',
             'task_id' => $this->task->id,
             'task_title' => $this->task->title,
             'days_remaining' => $this->daysRemaining,

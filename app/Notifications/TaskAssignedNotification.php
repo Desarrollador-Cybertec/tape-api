@@ -29,6 +29,7 @@ class TaskAssignedNotification extends Notification implements ShouldQueue
     {
         return [
             'type' => 'task_assigned',
+            'category' => $this->task->area_id ? 'organizational' : 'personal',
             'task_id' => $this->task->id,
             'task_title' => $this->task->title,
             'assigned_by' => $this->assignedBy->name,

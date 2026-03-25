@@ -29,6 +29,7 @@ class DailyTaskSummaryNotification extends Notification implements ShouldQueue
     {
         return [
             'type' => 'daily_summary',
+            'category' => 'summary',
             'total_pending' => $this->totalPending,
             'overdue_count' => $this->overdueCount,
             'due_soon_count' => $this->dueSoonCount,

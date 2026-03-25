@@ -30,6 +30,7 @@ class TaskCommentAddedNotification extends Notification implements ShouldQueue
     {
         return [
             'type' => 'task_comment',
+            'category' => $this->task->area_id ? 'organizational' : 'personal',
             'task_id' => $this->task->id,
             'task_title' => $this->task->title,
             'comment_by' => $this->commentBy->name,

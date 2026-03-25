@@ -29,6 +29,7 @@ class TaskApprovedNotification extends Notification implements ShouldQueue
     {
         return [
             'type' => 'task_approved',
+            'category' => $this->task->area_id ? 'organizational' : 'personal',
             'task_id' => $this->task->id,
             'task_title' => $this->task->title,
             'approved_by' => $this->approvedBy->name,

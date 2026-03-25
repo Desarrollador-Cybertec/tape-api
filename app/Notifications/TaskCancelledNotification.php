@@ -11,14 +11,14 @@ use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class TaskRejectedNotification extends Notification implements ShouldQueue
+class TaskCancelledNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
     public function __construct(
         public Task $task,
-        public User $rejectedBy,
-        public string $reason,
+        public User $cancelledBy,
+        public ?string $note = null,
     ) {}
 
     public function via(object $notifiable): array
@@ -29,26 +29,27 @@ class TaskRejectedNotification extends Notification implements ShouldQueue
     public function toArray(object $notifiable): array
     {
         return [
-            'type' => 'task_rejected',
+            'type' => 'task_cancelled',
             'category' => $this->task->area_id ? 'organizational' : 'personal',
             'task_id' => $this->task->id,
             'task_title' => $this->task->title,
-            'rejected_by' => $this->rejectedBy->name,
-            'reason' => $this->reason,
-            'message' => "La tarea \"{$this->task->title}\" ha sido rechazada: {$this->reason}",
+            'cancelled_by' => $this->cancelledBy->name,
+            'note' => $this->note,
+            'message' => "La tarea \"{$this->task->title}\" ha sido cancelada por {$this->cancelledBy->name}.",
         ];
     }
 
     public function toMail(object $notifiable): MailMessage
     {
         $settings = app(NotificationSettingsService::class);
-        $template = $settings->getTemplate('task_rejected');
+        $template = $settings->getTemplate('task_cancelled');
 
         if ($template) {
             $rendered = $settings->renderTemplate($template, [
                 'task_title' => $this->task->title,
                 'user_name' => $notifiable->name,
-                'rejection_reason' => $this->reason,
+                'cancelled_by' => $this->cancelledBy->name,
+                'note' => $this->note ?? 'Sin motivo especificado',
             ]);
 
             return (new MailMessage)
@@ -56,10 +57,15 @@ class TaskRejectedNotification extends Notification implements ShouldQueue
                 ->line($rendered['body']);
         }
 
-        return (new MailMessage)
-            ->subject("Tarea rechazada: {$this->task->title}")
-            ->line("La tarea \"{$this->task->title}\" necesita correcciones.")
-            ->line("Motivo: {$this->reason}");
+        $mail = (new MailMessage)
+            ->subject("Tarea cancelada: {$this->task->title}")
+            ->line("La tarea \"{$this->task->title}\" ha sido cancelada por {$this->cancelledBy->name}.");
+
+        if ($this->note) {
+            $mail->line("Motivo: {$this->note}");
+        }
+
+        return $mail;
     }
 
     public function toBroadcast(object $notifiable): BroadcastMessage

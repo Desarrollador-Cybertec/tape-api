@@ -13,9 +13,17 @@ use App\Models\AreaMember;
 use App\Models\Role;
 use App\Models\Task;
 use App\Models\User;
+use App\Notifications\TaskApprovedNotification;
+use App\Notifications\TaskAssignedNotification;
+use App\Notifications\TaskCancelledNotification;
+use App\Notifications\TaskCompletedNotification;
+use App\Notifications\TaskRejectedNotification;
+use App\Notifications\TaskReopenedNotification;
+use App\Notifications\TaskSubmittedForReviewNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class NotificationEventsTest extends TestCase
@@ -227,5 +235,258 @@ class NotificationEventsTest extends TestCase
             return $event->comment->comment === 'Esto es un avance'
                 && $event->commentBy->id === $this->worker->id;
         });
+    }
+
+    // ── Submit for Review → Manager Notification ──
+
+    public function test_submit_for_review_notifies_area_manager(): void
+    {
+        Notification::fake();
+
+        $task = Task::create([
+            'title' => 'Tarea en progreso',
+            'created_by' => $this->admin->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::IN_PROGRESS,
+            'requires_manager_approval' => true,
+        ]);
+
+        $this->actingAs($this->worker, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/submit-review");
+
+        Notification::assertSentTo($this->manager, TaskSubmittedForReviewNotification::class);
+        Notification::assertNotSentTo($this->worker, TaskSubmittedForReviewNotification::class);
+    }
+
+    public function test_submit_for_review_does_not_notify_for_personal_task(): void
+    {
+        Notification::fake();
+
+        $task = Task::create([
+            'title' => 'Tarea personal',
+            'created_by' => $this->worker->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => null,
+            'status' => TaskStatusEnum::IN_PROGRESS,
+            'requires_manager_approval' => true,
+        ]);
+
+        $this->actingAs($this->worker, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/submit-review");
+
+        // Personal task has no area → no manager to notify
+        Notification::assertNothingSent();
+    }
+
+    // ── Worker Completes (no approval) → Manager Notification ──
+
+    public function test_worker_completes_task_notifies_area_manager(): void
+    {
+        Notification::fake();
+
+        $task = Task::create([
+            'title' => 'Tarea sin aprobación',
+            'created_by' => $this->admin->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::IN_PROGRESS,
+            'requires_manager_approval' => false,
+        ]);
+
+        $this->actingAs($this->worker, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/submit-review");
+
+        // Worker completed → manager gets TaskCompletedNotification
+        Notification::assertSentTo($this->manager, TaskCompletedNotification::class);
+    }
+
+    // ── Manager Approves → Worker Gets Approved Notification ──
+
+    public function test_manager_approves_notifies_worker(): void
+    {
+        Notification::fake();
+
+        $task = Task::create([
+            'title' => 'Tarea en revisión',
+            'created_by' => $this->admin->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::IN_REVIEW,
+            'requires_manager_approval' => true,
+        ]);
+
+        $this->actingAs($this->manager, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/approve");
+
+        Notification::assertSentTo($this->worker, TaskApprovedNotification::class);
+        Notification::assertNotSentTo($this->manager, TaskApprovedNotification::class);
+    }
+
+    // ── Manager Rejects → Worker Gets Rejected Notification ──
+
+    public function test_manager_rejects_notifies_worker(): void
+    {
+        Notification::fake();
+
+        $task = Task::create([
+            'title' => 'Tarea en revisión',
+            'created_by' => $this->admin->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::IN_REVIEW,
+            'requires_manager_approval' => true,
+        ]);
+
+        $this->actingAs($this->manager, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/reject", [
+                'note' => 'Falta evidencia',
+            ]);
+
+        Notification::assertSentTo($this->worker, TaskRejectedNotification::class, function ($notification) {
+            return $notification->reason === 'Falta evidencia';
+        });
+    }
+
+    // ── Cancel → Responsible Notification ──
+
+    public function test_cancel_notifies_responsible_user(): void
+    {
+        Notification::fake();
+
+        $task = Task::create([
+            'title' => 'Tarea a cancelar',
+            'created_by' => $this->admin->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::IN_PROGRESS,
+        ]);
+
+        $this->actingAs($this->admin, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/cancel");
+
+        Notification::assertSentTo($this->worker, TaskCancelledNotification::class);
+    }
+
+    public function test_cancel_does_not_notify_self(): void
+    {
+        Notification::fake();
+
+        $task = Task::create([
+            'title' => 'Tarea propia',
+            'created_by' => $this->worker->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'status' => TaskStatusEnum::IN_PROGRESS,
+        ]);
+
+        $this->actingAs($this->worker, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/cancel");
+
+        Notification::assertNotSentTo($this->worker, TaskCancelledNotification::class);
+    }
+
+    // ── Reopen → Responsible Notification ──
+
+    public function test_reopen_completed_task_notifies_responsible(): void
+    {
+        Notification::fake();
+
+        $task = Task::create([
+            'title' => 'Tarea completada',
+            'created_by' => $this->admin->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::COMPLETED,
+            'completed_at' => now(),
+            'closed_by' => $this->manager->id,
+        ]);
+
+        $this->actingAs($this->admin, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/reopen", ['note' => 'Requiere ajustes']);
+
+        Notification::assertSentTo($this->worker, TaskReopenedNotification::class, function ($notification) {
+            return $notification->note === 'Requiere ajustes';
+        });
+    }
+
+    public function test_reopen_cancelled_task_notifies_responsible(): void
+    {
+        Notification::fake();
+
+        $task = Task::create([
+            'title' => 'Tarea cancelada',
+            'created_by' => $this->admin->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::CANCELLED,
+            'cancelled_by' => $this->admin->id,
+        ]);
+
+        $this->actingAs($this->admin, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/reopen");
+
+        Notification::assertSentTo($this->worker, TaskReopenedNotification::class);
+    }
+
+    public function test_normal_start_does_not_send_reopen_notification(): void
+    {
+        Notification::fake();
+
+        $task = Task::create([
+            'title' => 'Tarea pendiente',
+            'created_by' => $this->admin->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::PENDING,
+        ]);
+
+        $this->actingAs($this->worker, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/start");
+
+        // PENDING → IN_PROGRESS is a normal start, not a reopen
+        Notification::assertNotSentTo($this->worker, TaskReopenedNotification::class);
+        Notification::assertNotSentTo($this->manager, TaskReopenedNotification::class);
+    }
+
+    // ── Category field ──
+
+    public function test_notification_includes_organizational_category(): void
+    {
+        Notification::fake();
+
+        $task = Task::create([
+            'title' => 'Tarea de área',
+            'created_by' => $this->admin->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::IN_REVIEW,
+            'requires_manager_approval' => true,
+        ]);
+
+        $this->actingAs($this->manager, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/approve");
+
+        Notification::assertSentTo($this->worker, TaskApprovedNotification::class, function ($notification) use ($task) {
+            $data = $notification->toArray($this->worker);
+            return $data['category'] === 'organizational';
+        });
+    }
+
+    public function test_notification_includes_personal_category(): void
+    {
+        $notification = new TaskAssignedNotification(
+            Task::create([
+                'title' => 'Tarea personal',
+                'created_by' => $this->worker->id,
+                'current_responsible_user_id' => $this->worker->id,
+                'area_id' => null,
+                'status' => TaskStatusEnum::PENDING,
+            ]),
+            $this->admin,
+        );
+
+        $data = $notification->toArray($this->worker);
+
+        $this->assertEquals('personal', $data['category']);
     }
 }

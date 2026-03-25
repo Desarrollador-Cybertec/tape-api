@@ -227,12 +227,13 @@ class AutomationTest extends TestCase
             ->assertSuccessful();
     }
 
-    public function test_due_reminders_respects_emails_enabled_setting(): void
+    public function test_due_reminders_runs_even_when_emails_disabled(): void
     {
+        // When emails_enabled=false the command should still run and save notifications to DB.
+        // resolveChannels() omits the mail channel — it does NOT abort the command.
         SystemSetting::setValue('emails_enabled', false);
 
         $this->artisan('tasks:send-due-reminders')
-            ->expectsOutput('Correos automáticos desactivados.')
             ->assertSuccessful();
     }
 
