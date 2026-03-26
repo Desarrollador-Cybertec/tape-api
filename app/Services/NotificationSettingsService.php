@@ -21,7 +21,7 @@ class NotificationSettingsService
 
     public function shouldBroadcast(): bool
     {
-        return SystemSetting::getValue('broadcast_enabled', true);
+        return SystemSetting::getValue('broadcast_enabled', false);
     }
 
     // ── Feature toggles ───────────────────────────
