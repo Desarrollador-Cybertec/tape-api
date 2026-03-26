@@ -13,6 +13,7 @@ class SendTaskCommentNotification implements ShouldQueue
     {
         $task = $event->task;
         $commentBy = $event->commentBy;
+        $notified = [];
 
         // Notify the responsible user (if different from commenter)
         $responsible = $task->current_responsible_user_id
@@ -23,13 +24,14 @@ class SendTaskCommentNotification implements ShouldQueue
             $responsible->notify(
                 new TaskCommentAddedNotification($task, $commentBy, $event->comment->comment)
             );
+            $notified[] = $responsible->id;
         }
 
-        // Notify the creator (if different from commenter and responsible)
-        $creator = User::find($task->created_by);
+        // Notify the creator if different from commenter and not already notified
+        $creator = $task->created_by ? User::find($task->created_by) : null;
         if ($creator
             && $creator->id !== $commentBy->id
-            && (!$responsible || $creator->id !== $responsible->id)
+            && !in_array($creator->id, $notified)
         ) {
             $creator->notify(
                 new TaskCommentAddedNotification($task, $commentBy, $event->comment->comment)

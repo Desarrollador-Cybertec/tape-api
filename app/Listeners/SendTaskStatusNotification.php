@@ -33,20 +33,26 @@ class SendTaskStatusNotification implements ShouldQueue
 
     /**
      * Worker submits task for review → notify area manager.
+     * Fallback: if personal task (no area), notify the creator.
      */
     private function handleSubmittedForReview($task, User $submittedBy): void
     {
-        $this->notifyAreaManager(
-            $task,
-            $submittedBy,
-            new TaskSubmittedForReviewNotification($task, $submittedBy)
-        );
+        if ($task->area_id) {
+            $this->notifyAreaManager(
+                $task,
+                $submittedBy,
+                new TaskSubmittedForReviewNotification($task, $submittedBy)
+            );
+        } else {
+            $this->notifyCreator($task, $submittedBy, new TaskSubmittedForReviewNotification($task, $submittedBy));
+        }
     }
 
     /**
      * Task completed:
      * - By someone else (manager approved) → notify responsible worker (TaskApproved).
-     * - By the responsible user (no approval needed) → notify area manager (TaskCompleted).
+     * - By the responsible user (no approval needed) → notify area manager (TaskCompleted),
+     *   OR the task creator (fallback for personal tasks with no area).
      */
     private function handleCompleted($task, User $changedBy): void
     {
@@ -56,12 +62,18 @@ class SendTaskStatusNotification implements ShouldQueue
             // Manager/admin approved → notify the worker
             $responsible->notify(new TaskApprovedNotification($task, $changedBy));
         } elseif ($responsible && $responsible->id === $changedBy->id) {
-            // Worker completed without approval → notify area manager
-            $this->notifyAreaManager(
-                $task,
-                $changedBy,
-                new TaskCompletedNotification($task, $changedBy)
-            );
+            // Worker self-completed (no approval needed)
+            if ($task->area_id) {
+                // Organizational task → notify area manager
+                $this->notifyAreaManager(
+                    $task,
+                    $changedBy,
+                    new TaskCompletedNotification($task, $changedBy)
+                );
+            } else {
+                // Personal task (no area) → notify the creator if different from completer
+                $this->notifyCreator($task, $changedBy, new TaskCompletedNotification($task, $changedBy));
+            }
         }
     }
 
@@ -114,18 +126,34 @@ class SendTaskStatusNotification implements ShouldQueue
     }
 
     /**
-     * Notify the area manager of the task (if it's an organizational task).
+     * Notify the area manager of the task (organizational tasks only).
      */
     private function notifyAreaManager($task, User $excludeUser, $notification): void
     {
         if (!$task->area_id) {
-            return; // Personal task — no manager to notify
+            return;
         }
 
         $manager = $task->area?->manager;
 
         if ($manager && $manager->id !== $excludeUser->id) {
             $manager->notify($notification);
+        }
+    }
+
+    /**
+     * Notify the task creator (fallback for personal tasks with no area manager).
+     */
+    private function notifyCreator($task, User $excludeUser, $notification): void
+    {
+        if (!$task->created_by) {
+            return;
+        }
+
+        $creator = User::find($task->created_by);
+
+        if ($creator && $creator->id !== $excludeUser->id) {
+            $creator->notify($notification);
         }
     }
 

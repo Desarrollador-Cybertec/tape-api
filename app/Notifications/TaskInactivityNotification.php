@@ -5,6 +5,7 @@ namespace App\Notifications;
 use App\Services\NotificationSettingsService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Queue\SerializesModels;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -12,7 +13,7 @@ use Illuminate\Support\Collection;
 
 class TaskInactivityNotification extends Notification implements ShouldQueue
 {
-    use Queueable;
+    use Queueable, SerializesModels;
 
     /**
      * @param Collection<int, array{task_id: int, task_title: string, days_inactive: int, due_date: ?string}> $inactiveTasks
