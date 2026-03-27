@@ -2,15 +2,6 @@
 
 namespace App\Providers;
 
-use App\Events\TaskAssigned;
-use App\Events\TaskCommentAdded;
-use App\Events\TaskDelegated;
-use App\Events\TaskStatusChanged;
-use App\Listeners\SendTaskAssignedNotification;
-use App\Listeners\SendTaskCommentNotification;
-use App\Listeners\SendTaskDelegatedNotification;
-use App\Listeners\SendTaskStatusNotification;
-use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -25,12 +16,12 @@ class AppServiceProvider extends ServiceProvider
 
     /**
      * Bootstrap any application services.
+     *
+     * Event listeners are auto-discovered from app/Listeners/ by Laravel 12.
+     * Do NOT manually register them here — that would cause each event to fire twice.
      */
     public function boot(): void
     {
-        Event::listen(TaskAssigned::class, SendTaskAssignedNotification::class);
-        Event::listen(TaskDelegated::class, SendTaskDelegatedNotification::class);
-        Event::listen(TaskStatusChanged::class, SendTaskStatusNotification::class);
-        Event::listen(TaskCommentAdded::class, SendTaskCommentNotification::class);
+        //
     }
 }

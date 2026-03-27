@@ -18,6 +18,11 @@ class SendDueReminders extends Command
 
     public function handle(): int
     {
+        if (!SystemSetting::getValue('send_reminders_enabled', true)) {
+            $this->info('Recordatorios de vencimiento desactivados.');
+            return self::SUCCESS;
+        }
+
         $count = 0;
         $alertDays = SystemSetting::getValue('alert_days_before_due', 3);
 
