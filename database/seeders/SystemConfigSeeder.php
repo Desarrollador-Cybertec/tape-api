@@ -67,6 +67,13 @@ class SystemConfigSeeder extends Seeder
                 'group' => 'notifications',
                 'description' => 'Enviar copia de notificaciones al super administrador',
             ],
+            [
+                'key' => 'broadcast_enabled',
+                'value' => '0',
+                'type' => 'boolean',
+                'group' => 'notifications',
+                'description' => 'Activar notificaciones en tiempo real (requiere Laravel Reverb + pusher/pusher-php-server)',
+            ],
 
             // Automation group
             [

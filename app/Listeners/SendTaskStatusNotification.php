@@ -32,19 +32,32 @@ class SendTaskStatusNotification implements ShouldQueue
     }
 
     /**
-     * Worker submits task for review → notify area manager.
-     * Fallback: if personal task (no area), notify the creator.
+     * Worker submits task for review → notify whoever is responsible for approving it.
+     *
+     * Priority chain:
+     *  1. The user who last delegated the task (delegated_by)
+     *  2. The user who assigned the task (assigned_by)
+     *  3. The task creator (created_by) as final fallback
+     *
+     * This covers all scenarios naturally:
+     *  - Superadmin assigned → superadmin is notified
+     *  - Area manager assigned or delegated → area manager is notified
+     *  - No specific assigner found → creator is notified
      */
     private function handleSubmittedForReview($task, User $submittedBy): void
     {
-        if ($task->area_id) {
-            $this->notifyAreaManager(
-                $task,
-                $submittedBy,
-                new TaskSubmittedForReviewNotification($task, $submittedBy)
-            );
-        } else {
-            $this->notifyCreator($task, $submittedBy, new TaskSubmittedForReviewNotification($task, $submittedBy));
+        $approverId = $task->delegated_by
+            ?? $task->assigned_by
+            ?? $task->created_by;
+
+        if (!$approverId) {
+            return;
+        }
+
+        $approver = User::find($approverId);
+
+        if ($approver && $approver->id !== $submittedBy->id) {
+            $approver->notify(new TaskSubmittedForReviewNotification($task, $submittedBy));
         }
     }
 

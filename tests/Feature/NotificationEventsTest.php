@@ -237,15 +237,17 @@ class NotificationEventsTest extends TestCase
         });
     }
 
-    // ── Submit for Review → Manager Notification ──
+    // ── Submit for Review → Smart Approver Routing ──
 
-    public function test_submit_for_review_notifies_area_manager(): void
+    public function test_submit_for_review_notifies_assigner_area_manager(): void
     {
         Notification::fake();
 
+        // Manager assigned the task → manager should be notified (not all superadmins)
         $task = Task::create([
-            'title' => 'Tarea en progreso',
+            'title' => 'Tarea asignada por manager',
             'created_by' => $this->admin->id,
+            'assigned_by' => $this->manager->id,
             'current_responsible_user_id' => $this->worker->id,
             'area_id' => $this->area->id,
             'status' => TaskStatusEnum::IN_PROGRESS,
@@ -256,16 +258,19 @@ class NotificationEventsTest extends TestCase
             ->postJson("/api/tasks/{$task->id}/submit-review");
 
         Notification::assertSentTo($this->manager, TaskSubmittedForReviewNotification::class);
+        Notification::assertNotSentTo($this->admin, TaskSubmittedForReviewNotification::class);
         Notification::assertNotSentTo($this->worker, TaskSubmittedForReviewNotification::class);
     }
 
-    public function test_submit_for_review_does_not_notify_for_personal_task(): void
+    public function test_submit_for_review_notifies_assigner_superadmin_for_personal_task(): void
     {
         Notification::fake();
 
+        // Superadmin assigned the task directly (personal task) → superadmin notified
         $task = Task::create([
-            'title' => 'Tarea personal',
-            'created_by' => $this->worker->id,
+            'title' => 'Tarea personal asignada por superadmin',
+            'created_by' => $this->admin->id,
+            'assigned_by' => $this->admin->id,
             'current_responsible_user_id' => $this->worker->id,
             'area_id' => null,
             'status' => TaskStatusEnum::IN_PROGRESS,
@@ -275,8 +280,53 @@ class NotificationEventsTest extends TestCase
         $this->actingAs($this->worker, 'sanctum')
             ->postJson("/api/tasks/{$task->id}/submit-review");
 
-        // Personal task has no area → no manager to notify
-        Notification::assertNothingSent();
+        Notification::assertSentTo($this->admin, TaskSubmittedForReviewNotification::class);
+        Notification::assertNotSentTo($this->worker, TaskSubmittedForReviewNotification::class);
+    }
+
+    public function test_submit_for_review_notifies_delegator_over_assigner(): void
+    {
+        Notification::fake();
+
+        // Task was assigned by superadmin but then delegated by manager → delegator takes priority
+        $task = Task::create([
+            'title' => 'Tarea delegada',
+            'created_by' => $this->admin->id,
+            'assigned_by' => $this->admin->id,
+            'delegated_by' => $this->manager->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::IN_PROGRESS,
+            'requires_manager_approval' => true,
+        ]);
+
+        $this->actingAs($this->worker, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/submit-review");
+
+        Notification::assertSentTo($this->manager, TaskSubmittedForReviewNotification::class);
+        Notification::assertNotSentTo($this->admin, TaskSubmittedForReviewNotification::class);
+        Notification::assertNotSentTo($this->worker, TaskSubmittedForReviewNotification::class);
+    }
+
+    public function test_submit_for_review_falls_back_to_creator(): void
+    {
+        Notification::fake();
+
+        // No assigned_by, no delegated_by → fall back to created_by
+        $task = Task::create([
+            'title' => 'Tarea sin asignador explícito',
+            'created_by' => $this->admin->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::IN_PROGRESS,
+            'requires_manager_approval' => true,
+        ]);
+
+        $this->actingAs($this->worker, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/submit-review");
+
+        Notification::assertSentTo($this->admin, TaskSubmittedForReviewNotification::class);
+        Notification::assertNotSentTo($this->worker, TaskSubmittedForReviewNotification::class);
     }
 
     // ── Worker Completes (no approval) → Manager Notification ──
