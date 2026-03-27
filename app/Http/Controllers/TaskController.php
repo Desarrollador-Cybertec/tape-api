@@ -246,20 +246,24 @@ class TaskController extends Controller
     {
         $this->authorize('reopen', $task);
 
-        $note = $request->input('note');
+        $validated = $request->validate([
+            'note' => ['nullable', 'string', 'max:2000'],
+        ]);
 
-        $task = $service->reopen($task, $request->user(), $note);
+        $task = $service->reopen($task, $request->user(), $validated['note'] ?? null);
 
         return new TaskResource($task->load(['currentResponsible', 'area', 'latestUpdate']));
     }
 
     public function comment(StoreTaskCommentRequest $request, Task $task): JsonResponse
     {
+        $validated = $request->validated();
+
         $comment = TaskComment::create([
             'task_id' => $task->id,
             'user_id' => $request->user()->id,
-            'comment' => $request->comment,
-            'type' => $request->type ?? 'comment',
+            'comment' => $validated['comment'],
+            'type' => $validated['type'] ?? 'comment',
         ]);
 
         event(new TaskCommentAdded($task, $comment, $request->user()));
@@ -272,6 +276,7 @@ class TaskController extends Controller
 
     public function addAttachment(StoreTaskAttachmentRequest $request, Task $task): JsonResponse
     {
+        $validated = $request->validated();
         $file = $request->file('file');
         $path = $file->store("tasks/{$task->id}", 'local');
 
@@ -282,7 +287,7 @@ class TaskController extends Controller
             'file_path' => $path,
             'mime_type' => $file->getMimeType(),
             'file_size' => $file->getSize(),
-            'attachment_type' => $request->attachment_type ?? AttachmentTypeEnum::SUPPORT->value,
+            'attachment_type' => $validated['attachment_type'] ?? AttachmentTypeEnum::SUPPORT->value,
         ]);
 
         return response()->json(
@@ -293,16 +298,18 @@ class TaskController extends Controller
 
     public function addUpdate(StoreTaskUpdateRequest $request, Task $task): JsonResponse
     {
+        $validated = $request->validated();
+
         $update = TaskUpdate::create([
             'task_id' => $task->id,
             'user_id' => $request->user()->id,
-            'update_type' => $request->update_type ?? 'progress',
-            'comment' => $request->comment,
-            'progress_percent' => $request->progress_percent,
+            'update_type' => $validated['update_type'] ?? 'progress',
+            'comment' => $validated['comment'],
+            'progress_percent' => $validated['progress_percent'] ?? null,
         ]);
 
-        if ($request->progress_percent !== null) {
-            $task->update(['progress_percent' => $request->progress_percent]);
+        if (isset($validated['progress_percent'])) {
+            $task->update(['progress_percent' => $validated['progress_percent']]);
         }
 
         return response()->json(
