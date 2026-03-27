@@ -40,25 +40,16 @@ class TaskSubmittedForReviewNotification extends Notification implements ShouldQ
 
     public function toMail(object $notifiable): MailMessage
     {
-        $settings = app(NotificationSettingsService::class);
-        $template = $settings->getTemplate('task_submitted_review');
-
-        if ($template) {
-            $rendered = $settings->renderTemplate($template, [
-                'task_title' => $this->task->title,
-                'user_name' => $notifiable->name,
+        return app(NotificationSettingsService::class)->buildMailMessage(
+            'task_submitted_review',
+            [
+                'task_title'   => $this->task->title,
+                'user_name'    => $notifiable->name,
                 'submitted_by' => $this->submittedBy->name,
-            ]);
-
-            return (new MailMessage)
-                ->subject($rendered['subject'])
-                ->line($rendered['body']);
-        }
-
-        return (new MailMessage)
-            ->subject("Tarea enviada a revisión: {$this->task->title}")
-            ->line("{$this->submittedBy->name} envió la tarea \"{$this->task->title}\" a revisión.")
-            ->line("Requiere tu aprobación.");
+            ],
+            "Tarea enviada a revisión: {$this->task->title}",
+            "{$this->submittedBy->name} envió la tarea \"{$this->task->title}\" a revisión.\n\nRequiere tu aprobación."
+        );
     }
 
     public function toBroadcast(object $notifiable): BroadcastMessage

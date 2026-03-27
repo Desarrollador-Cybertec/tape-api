@@ -42,27 +42,20 @@ class TaskAssignedNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $settings = app(NotificationSettingsService::class);
-        $template = $settings->getTemplate('new_assignment');
+        $priority = $this->task->priority->value ?? $this->task->priority;
+        $dueDate = $this->task->due_date?->toDateString() ?? 'Sin fecha';
 
-        if ($template) {
-            $rendered = $settings->renderTemplate($template, [
+        return app(NotificationSettingsService::class)->buildMailMessage(
+            'new_assignment',
+            [
                 'task_title' => $this->task->title,
-                'user_name' => $notifiable->name,
-                'priority' => $this->task->priority->value ?? $this->task->priority,
-                'due_date' => $this->task->due_date?->toDateString() ?? 'Sin fecha',
-            ]);
-
-            return (new MailMessage)
-                ->subject($rendered['subject'])
-                ->line($rendered['body']);
-        }
-
-        return (new MailMessage)
-            ->subject("Nueva tarea asignada: {$this->task->title}")
-            ->line("Se te ha asignado la tarea \"{$this->task->title}\".")
-            ->line("Prioridad: " . ($this->task->priority->value ?? $this->task->priority))
-            ->line("Fecha límite: " . ($this->task->due_date?->toDateString() ?? 'Sin fecha'));
+                'user_name'  => $notifiable->name,
+                'priority'   => $priority,
+                'due_date'   => $dueDate,
+            ],
+            "Nueva tarea asignada: {$this->task->title}",
+            "Se te ha asignado la tarea \"{$this->task->title}\".\n\nPrioridad: {$priority}\nFecha límite: {$dueDate}\n\nPor favor revisa los detalles en la plataforma."
+        );
     }
 
     public function toBroadcast(object $notifiable): BroadcastMessage

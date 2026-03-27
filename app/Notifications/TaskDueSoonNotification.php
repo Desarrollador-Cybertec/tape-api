@@ -44,25 +44,19 @@ class TaskDueSoonNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $settings = app(NotificationSettingsService::class);
-        $template = $settings->getTemplate('task_reminder');
+        $dueDate = $this->task->due_date?->toDateString() ?? 'Sin fecha';
 
-        if ($template) {
-            $rendered = $settings->renderTemplate($template, [
-                'task_title' => $this->task->title,
-                'user_name' => $notifiable->name,
+        return app(NotificationSettingsService::class)->buildMailMessage(
+            'task_reminder',
+            [
+                'task_title'     => $this->task->title,
+                'user_name'      => $notifiable->name,
                 'days_remaining' => $this->daysRemaining,
-                'due_date' => $this->task->due_date?->toDateString() ?? 'Sin fecha',
-            ]);
-
-            return (new MailMessage)
-                ->subject($rendered['subject'])
-                ->line($rendered['body']);
-        }
-
-        return (new MailMessage)
-            ->subject("Recordatorio: \"{$this->task->title}\" vence pronto")
-            ->line("La tarea \"{$this->task->title}\" vence en {$this->daysRemaining} día(s).");
+                'due_date'       => $dueDate,
+            ],
+            "Recordatorio: \"{$this->task->title}\" vence pronto",
+            "La tarea \"{$this->task->title}\" vence en {$this->daysRemaining} día(s).\n\nFecha límite: {$dueDate}"
+        );
     }
 
     public function toBroadcast(object $notifiable): BroadcastMessage

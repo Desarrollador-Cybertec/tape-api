@@ -40,24 +40,16 @@ class TaskCompletedNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $settings = app(NotificationSettingsService::class);
-        $template = $settings->getTemplate('task_completed');
-
-        if ($template) {
-            $rendered = $settings->renderTemplate($template, [
-                'task_title' => $this->task->title,
-                'user_name' => $notifiable->name,
+        return app(NotificationSettingsService::class)->buildMailMessage(
+            'task_completed',
+            [
+                'task_title'   => $this->task->title,
+                'user_name'    => $notifiable->name,
                 'completed_by' => $this->completedBy->name,
-            ]);
-
-            return (new MailMessage)
-                ->subject($rendered['subject'])
-                ->line($rendered['body']);
-        }
-
-        return (new MailMessage)
-            ->subject("Tarea completada: {$this->task->title}")
-            ->line("{$this->completedBy->name} completó la tarea \"{$this->task->title}\".");
+            ],
+            "Tarea completada: {$this->task->title}",
+            "{$this->completedBy->name} completó la tarea \"{$this->task->title}\"."
+        );
     }
 
     public function toBroadcast(object $notifiable): BroadcastMessage

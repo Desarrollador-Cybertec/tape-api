@@ -42,25 +42,17 @@ class TaskRejectedNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $settings = app(NotificationSettingsService::class);
-        $template = $settings->getTemplate('task_rejected');
-
-        if ($template) {
-            $rendered = $settings->renderTemplate($template, [
-                'task_title' => $this->task->title,
-                'user_name' => $notifiable->name,
+        return app(NotificationSettingsService::class)->buildMailMessage(
+            'task_rejected',
+            [
+                'task_title'       => $this->task->title,
+                'user_name'        => $notifiable->name,
                 'rejection_reason' => $this->reason,
-            ]);
-
-            return (new MailMessage)
-                ->subject($rendered['subject'])
-                ->line($rendered['body']);
-        }
-
-        return (new MailMessage)
-            ->subject("Tarea rechazada: {$this->task->title}")
-            ->line("La tarea \"{$this->task->title}\" necesita correcciones.")
-            ->line("Motivo: {$this->reason}");
+                'rejected_by'      => $this->rejectedBy->name,
+            ],
+            "Tarea rechazada: {$this->task->title}",
+            "La tarea \"{$this->task->title}\" necesita correcciones.\n\nMotivo: {$this->reason}"
+        );
     }
 
     public function toBroadcast(object $notifiable): BroadcastMessage

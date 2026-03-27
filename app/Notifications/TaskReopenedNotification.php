@@ -42,31 +42,22 @@ class TaskReopenedNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $settings = app(NotificationSettingsService::class);
-        $template = $settings->getTemplate('task_reopened');
-
-        if ($template) {
-            $rendered = $settings->renderTemplate($template, [
-                'task_title' => $this->task->title,
-                'user_name' => $notifiable->name,
-                'reopened_by' => $this->reopenedBy->name,
-                'note' => $this->note ?? '',
-            ]);
-
-            return (new MailMessage)
-                ->subject($rendered['subject'])
-                ->line($rendered['body']);
-        }
-
-        $mail = (new MailMessage)
-            ->subject("Tarea reabierta: {$this->task->title}")
-            ->line("La tarea \"{$this->task->title}\" ha sido reabierta por {$this->reopenedBy->name}.");
-
+        $fallbackBody = "La tarea \"{$this->task->title}\" ha sido reabierta por {$this->reopenedBy->name}.";
         if ($this->note) {
-            $mail->line("Nota: {$this->note}");
+            $fallbackBody .= "\n\nNota: {$this->note}";
         }
 
-        return $mail;
+        return app(NotificationSettingsService::class)->buildMailMessage(
+            'task_reopened',
+            [
+                'task_title'  => $this->task->title,
+                'user_name'   => $notifiable->name,
+                'reopened_by' => $this->reopenedBy->name,
+                'note'        => $this->note ?? '',
+            ],
+            "Tarea reabierta: {$this->task->title}",
+            $fallbackBody
+        );
     }
 
     public function toBroadcast(object $notifiable): BroadcastMessage

@@ -40,23 +40,16 @@ class TaskApprovedNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $settings = app(NotificationSettingsService::class);
-        $template = $settings->getTemplate('task_approved');
-
-        if ($template) {
-            $rendered = $settings->renderTemplate($template, [
-                'task_title' => $this->task->title,
-                'user_name' => $notifiable->name,
-            ]);
-
-            return (new MailMessage)
-                ->subject($rendered['subject'])
-                ->line($rendered['body']);
-        }
-
-        return (new MailMessage)
-            ->subject("Tarea aprobada: {$this->task->title}")
-            ->line("La tarea \"{$this->task->title}\" ha sido aprobada. ¡Buen trabajo!");
+        return app(NotificationSettingsService::class)->buildMailMessage(
+            'task_approved',
+            [
+                'task_title'  => $this->task->title,
+                'user_name'   => $notifiable->name,
+                'approved_by' => $this->approvedBy->name,
+            ],
+            "Tarea aprobada: {$this->task->title}",
+            "La tarea \"{$this->task->title}\" ha sido aprobada.\n\n¡Buen trabajo!"
+        );
     }
 
     public function toBroadcast(object $notifiable): BroadcastMessage

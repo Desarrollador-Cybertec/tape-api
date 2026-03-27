@@ -42,29 +42,20 @@ class TaskInactivityNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $settings = app(NotificationSettingsService::class);
-        $template = $settings->getTemplate('inactivity_alert');
-
         $taskList = $this->inactiveTasks->map(
             fn (array $t) => "- {$t['task_title']} ({$t['days_inactive']} días sin avance)"
         )->implode("\n");
 
-        if ($template) {
-            $rendered = $settings->renderTemplate($template, [
-                'user_name' => $notifiable->name,
+        return app(NotificationSettingsService::class)->buildMailMessage(
+            'inactivity_alert',
+            [
+                'user_name'       => $notifiable->name,
                 'inactivity_days' => $this->inactivityDays,
-                'task_list' => $taskList,
-            ]);
-
-            return (new MailMessage)
-                ->subject($rendered['subject'])
-                ->line($rendered['body']);
-        }
-
-        return (new MailMessage)
-            ->subject("Alerta: Tareas sin avance desde hace {$this->inactivityDays} días")
-            ->line("Tienes {$this->inactiveTasks->count()} tarea(s) sin avance:")
-            ->line($taskList);
+                'task_list'       => $taskList,
+            ],
+            "Alerta: Tareas sin avance desde hace {$this->inactivityDays} días",
+            "Tienes {$this->inactiveTasks->count()} tarea(s) sin avance en los últimos {$this->inactivityDays} días:\n\n{$taskList}"
+        );
     }
 
     public function toBroadcast(object $notifiable): BroadcastMessage

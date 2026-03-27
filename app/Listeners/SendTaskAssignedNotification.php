@@ -23,12 +23,15 @@ class SendTaskAssignedNotification implements ShouldQueue
 
         $assignedTo->notify(new TaskAssignedNotification($task, $event->assignedBy));
 
+        // Track notified user IDs to prevent any duplicates
+        $notifiedIds = [$event->assignedBy->id, $assignedTo->id];
+
         // Copy to manager if enabled
         $settings = app(NotificationSettingsService::class);
 
         if ($settings->shouldCopyManager() && $task->area_id) {
             $manager = $task->area?->manager;
-            if ($manager && $manager->id !== $assignedTo->id && $manager->id !== $event->assignedBy->id) {
+            if ($manager && !in_array($manager->id, $notifiedIds, true)) {
                 $manager->notify(new TaskAssignedNotification($task, $event->assignedBy));
             }
         }

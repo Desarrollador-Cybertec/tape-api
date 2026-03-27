@@ -42,31 +42,23 @@ class TaskCancelledNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $settings = app(NotificationSettingsService::class);
-        $template = $settings->getTemplate('task_cancelled');
-
-        if ($template) {
-            $rendered = $settings->renderTemplate($template, [
-                'task_title' => $this->task->title,
-                'user_name' => $notifiable->name,
-                'cancelled_by' => $this->cancelledBy->name,
-                'note' => $this->note ?? 'Sin motivo especificado',
-            ]);
-
-            return (new MailMessage)
-                ->subject($rendered['subject'])
-                ->line($rendered['body']);
-        }
-
-        $mail = (new MailMessage)
-            ->subject("Tarea cancelada: {$this->task->title}")
-            ->line("La tarea \"{$this->task->title}\" ha sido cancelada por {$this->cancelledBy->name}.");
-
+        $note = $this->note ?? 'Sin motivo especificado';
+        $fallbackBody = "La tarea \"{$this->task->title}\" ha sido cancelada por {$this->cancelledBy->name}.";
         if ($this->note) {
-            $mail->line("Motivo: {$this->note}");
+            $fallbackBody .= "\n\nMotivo: {$this->note}";
         }
 
-        return $mail;
+        return app(NotificationSettingsService::class)->buildMailMessage(
+            'task_cancelled',
+            [
+                'task_title'   => $this->task->title,
+                'user_name'    => $notifiable->name,
+                'cancelled_by' => $this->cancelledBy->name,
+                'note'         => $note,
+            ],
+            "Tarea cancelada: {$this->task->title}",
+            $fallbackBody
+        );
     }
 
     public function toBroadcast(object $notifiable): BroadcastMessage

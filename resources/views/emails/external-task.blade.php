@@ -1,9 +1,8 @@
 <x-mail::message>
-# Nueva Tarea Asignada
 
-Hola {{ $task->external_name ?? 'estimado/a' }},
+## ¡Hola{{ $task->external_name ? ', ' . explode(' ', trim($task->external_name))[0] : '' }}!
 
-Se le ha asignado una nueva tarea:
+Desde nuestro sistema TAPE, te informamos que necesitamos que nos ayudes con una tarea:
 
 **{{ $task->title }}**
 
@@ -11,12 +10,10 @@ Se le ha asignado una nueva tarea:
 {{ $task->description }}
 @endif
 
-@if($task->due_date)
-**Fecha límite:** {{ $task->due_date->format('d/m/Y') }}
-@endif
+Para nosotros es de prioridad **{{ $task->priority->value }}**, y necesitamos que nos ayudes antes del **{{ $task->due_date?->format('d/m/Y') ?? 'plazo acordado' }}**.
 
-**Prioridad:** {{ $task->priority->value }}
+Te lo agradecemos,  
+{{ $task->creator?->name ?? 'El equipo' }},  
+**Sistema TAPE**
 
-Gracias,<br>
-{{ config('app.name') }}
 </x-mail::message>

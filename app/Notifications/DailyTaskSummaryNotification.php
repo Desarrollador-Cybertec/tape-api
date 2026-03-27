@@ -40,24 +40,18 @@ class DailyTaskSummaryNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $settings = app(NotificationSettingsService::class);
-        $template = $settings->getTemplate('daily_summary');
+        $date = now()->toDateString();
 
-        if ($template) {
-            $rendered = $settings->renderTemplate($template, [
-                'user_name' => $notifiable->name,
-                'date' => now()->toDateString(),
+        return app(NotificationSettingsService::class)->buildMailMessage(
+            'daily_summary',
+            [
+                'user_name'       => $notifiable->name,
+                'date'            => $date,
                 'summary_content' => $this->summaryContent,
-            ]);
-
-            return (new MailMessage)
-                ->subject($rendered['subject'])
-                ->line($rendered['body']);
-        }
-
-        return (new MailMessage)
-            ->subject("Resumen diario de tareas — " . now()->toDateString())
-            ->line($this->summaryContent);
+            ],
+            "Resumen diario de tareas — {$date}",
+            "Hola {$notifiable->name},\n\n{$this->summaryContent}"
+        );
     }
 
     public function toBroadcast(object $notifiable): BroadcastMessage

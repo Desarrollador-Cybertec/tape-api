@@ -1010,4 +1010,59 @@ class TaskTest extends TestCase
             ->postJson("/api/tasks/{$task->id}/claim")
             ->assertUnprocessable();
     }
+
+    // ── External Task Status Management ──
+
+    public function test_worker_can_start_external_task_they_created(): void
+    {
+        $task = Task::create([
+            'title' => 'Tarea externa',
+            'created_by' => $this->worker->id,
+            'external_email' => 'proveedor@example.com',
+            'external_name' => 'Juan Proveedor',
+            'current_responsible_user_id' => null,
+            'status' => TaskStatusEnum::PENDING,
+        ]);
+
+        $response = $this->actingAs($this->worker, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/start");
+
+        $response->assertOk();
+        $this->assertEquals(TaskStatusEnum::IN_PROGRESS, $task->fresh()->status);
+    }
+
+    public function test_worker_can_submit_external_task_for_review(): void
+    {
+        $task = Task::create([
+            'title' => 'Tarea externa en progreso',
+            'created_by' => $this->worker->id,
+            'external_email' => 'proveedor@example.com',
+            'current_responsible_user_id' => null,
+            'status' => TaskStatusEnum::IN_PROGRESS,
+            'requires_manager_approval' => false,
+        ]);
+
+        $response = $this->actingAs($this->worker, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/submit-review");
+
+        $response->assertOk();
+        $this->assertEquals(TaskStatusEnum::COMPLETED, $task->fresh()->status);
+    }
+
+    public function test_worker_cannot_start_external_task_of_another_user(): void
+    {
+        $otherWorker = User::factory()->create(['role_id' => $this->roles['worker']->id]);
+
+        $task = Task::create([
+            'title' => 'Tarea externa ajena',
+            'created_by' => $otherWorker->id,
+            'external_email' => 'proveedor@example.com',
+            'current_responsible_user_id' => null,
+            'status' => TaskStatusEnum::PENDING,
+        ]);
+
+        $this->actingAs($this->worker, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/start")
+            ->assertForbidden();
+    }
 }

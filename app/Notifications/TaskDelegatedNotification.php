@@ -41,25 +41,21 @@ class TaskDelegatedNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $settings = app(NotificationSettingsService::class);
-        $template = $settings->getTemplate('task_delegated');
+        $dueDate = $this->task->due_date?->toDateString() ?? 'Sin fecha';
+        $priority = $this->task->priority->value ?? $this->task->priority;
 
-        if ($template) {
-            $rendered = $settings->renderTemplate($template, [
-                'task_title' => $this->task->title,
-                'user_name' => $notifiable->name,
+        return app(NotificationSettingsService::class)->buildMailMessage(
+            'task_delegated',
+            [
+                'task_title'   => $this->task->title,
+                'user_name'    => $notifiable->name,
                 'delegated_by' => $this->delegatedBy->name,
-                'due_date' => $this->task->due_date?->toDateString() ?? 'Sin fecha',
-            ]);
-
-            return (new MailMessage)
-                ->subject($rendered['subject'])
-                ->line($rendered['body']);
-        }
-
-        return (new MailMessage)
-            ->subject("Tarea delegada: {$this->task->title}")
-            ->line("Se te ha delegado la tarea \"{$this->task->title}\" por {$this->delegatedBy->name}.");
+                'due_date'     => $dueDate,
+                'priority'     => $priority,
+            ],
+            "Tarea delegada: {$this->task->title}",
+            "Se te ha delegado la tarea \"{$this->task->title}\" por {$this->delegatedBy->name}.\n\nFecha límite: {$dueDate}"
+        );
     }
 
     public function toBroadcast(object $notifiable): BroadcastMessage

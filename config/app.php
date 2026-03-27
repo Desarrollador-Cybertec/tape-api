@@ -54,6 +54,10 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    'logo_url' => env('APP_LOGO_URL', null),
+
+    'frontend_url' => env('FRONTEND_URL', 'https://app.cyberteconline.com'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

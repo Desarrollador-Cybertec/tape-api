@@ -112,12 +112,24 @@ class TaskPolicy
 
     public function start(User $user, Task $task): bool
     {
-        return $task->current_responsible_user_id === $user->id;
+        // Normal case: the current responsible starts the task
+        if ($task->current_responsible_user_id === $user->id) {
+            return true;
+        }
+
+        // External task: the creator manages it on behalf of the external contact
+        return $task->external_email && $task->created_by === $user->id;
     }
 
     public function submitForReview(User $user, Task $task): bool
     {
-        return $task->current_responsible_user_id === $user->id;
+        // Normal case: the current responsible submits
+        if ($task->current_responsible_user_id === $user->id) {
+            return true;
+        }
+
+        // External task: the creator marks it complete on behalf of the external contact
+        return $task->external_email && $task->created_by === $user->id;
     }
 
     public function approve(User $user, Task $task): bool

@@ -99,6 +99,34 @@ class NotificationSettingsService
         ];
     }
 
+    // ── Mail builder ──────────────────────────────
+
+    /**
+     * Build a MailMessage using a DB template (or fallback) rendered through
+     * the custom tape-notification Blade view (no "Hello!" / "Regards, Laravel").
+     */
+    public function buildMailMessage(
+        string $templateSlug,
+        array $variables,
+        string $fallbackSubject,
+        string $fallbackBody,
+    ): \Illuminate\Notifications\Messages\MailMessage {
+        $template = $this->getTemplate($templateSlug);
+
+        if ($template) {
+            $rendered = $this->renderTemplate($template, $variables);
+            $viewData = array_merge(['body' => $rendered['body']], $variables);
+            return (new \Illuminate\Notifications\Messages\MailMessage)
+                ->subject($rendered['subject'])
+                ->markdown('emails.tape-notification', $viewData);
+        }
+
+        $viewData = array_merge(['body' => $fallbackBody], $variables);
+        return (new \Illuminate\Notifications\Messages\MailMessage)
+            ->subject($fallbackSubject)
+            ->markdown('emails.tape-notification', $viewData);
+    }
+
     // ── Channels resolver ─────────────────────────
 
     /**

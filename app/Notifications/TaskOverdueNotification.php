@@ -40,25 +40,19 @@ class TaskOverdueNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $settings = app(NotificationSettingsService::class);
-        $template = $settings->getTemplate('task_overdue');
+        $dueDate = $this->task->due_date?->toDateString() ?? 'Sin fecha';
 
-        if ($template) {
-            $rendered = $settings->renderTemplate($template, [
-                'task_title' => $this->task->title,
-                'user_name' => $notifiable->name,
+        return app(NotificationSettingsService::class)->buildMailMessage(
+            'task_overdue',
+            [
+                'task_title'   => $this->task->title,
+                'user_name'    => $notifiable->name,
                 'days_overdue' => $this->daysOverdue,
-                'due_date' => $this->task->due_date?->toDateString() ?? 'Sin fecha',
-            ]);
-
-            return (new MailMessage)
-                ->subject($rendered['subject'])
-                ->line($rendered['body']);
-        }
-
-        return (new MailMessage)
-            ->subject("Tarea vencida: {$this->task->title}")
-            ->line("La tarea \"{$this->task->title}\" está vencida por {$this->daysOverdue} día(s).");
+                'due_date'     => $dueDate,
+            ],
+            "Tarea vencida: {$this->task->title}",
+            "La tarea \"{$this->task->title}\" está vencida por {$this->daysOverdue} día(s).\n\nFecha límite original: {$dueDate}"
+        );
     }
 
     public function toBroadcast(object $notifiable): BroadcastMessage
