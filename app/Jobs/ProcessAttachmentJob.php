@@ -25,21 +25,43 @@ class ProcessAttachmentJob implements ShouldQueue
 
     public function handle(AttachmentProcessingService $service): void
     {
-        $service->process($this->attachment);
+        Log::info('[AttachmentJob] Attempt ' . $this->attempts() . '/' . $this->tries, [
+            'attachment_id' => $this->attachment->id,
+            'uuid' => $this->attachment->uuid,
+        ]);
+
+        try {
+            $service->process($this->attachment);
+        } catch (\Throwable $e) {
+            Log::error('[AttachmentJob] Attempt ' . $this->attempts() . ' failed', [
+                'attachment_id' => $this->attachment->id,
+                'uuid' => $this->attachment->uuid,
+                'error' => $e->getMessage(),
+                'exception_class' => get_class($e),
+                'file' => $e->getFile() . ':' . $e->getLine(),
+            ]);
+
+            throw $e;
+        }
     }
 
     public function failed(\Throwable $e): void
     {
-        Log::error('ProcessAttachmentJob permanently failed', [
+        // Preserve the real error from metadata if MaxAttemptsExceededException overwrote it
+        $realError = $this->attachment->metadata['error'] ?? $e->getMessage();
+
+        Log::error('[AttachmentJob] PERMANENTLY FAILED', [
             'attachment_id' => $this->attachment->id,
             'uuid' => $this->attachment->uuid,
-            'error' => $e->getMessage(),
+            'real_error' => $realError,
+            'final_exception' => $e->getMessage(),
         ]);
 
         $this->attachment->update([
             'processing_status' => ProcessingStatusEnum::FAILED,
             'metadata' => array_merge($this->attachment->metadata ?? [], [
-                'error' => $e->getMessage(),
+                'error' => $realError,
+                'final_exception' => get_class($e) . ': ' . $e->getMessage(),
                 'failed_at' => now()->toISOString(),
             ]),
         ]);
