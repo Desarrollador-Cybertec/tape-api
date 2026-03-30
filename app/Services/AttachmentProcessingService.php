@@ -6,13 +6,11 @@ use App\Enums\ProcessingStatusEnum;
 use App\Models\Attachment;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use Intervention\Image\ImageManager;
-use Intervention\Image\Drivers\Gd\Driver as GdDriver;
 
 class AttachmentProcessingService
 {
     private const MAX_IMAGE_WIDTH = 2048;
-    private const IMAGE_QUALITY = 80;
+    private const WEBP_QUALITY = 80;
 
     public function process(Attachment $attachment): void
     {
@@ -95,20 +93,66 @@ class AttachmentProcessingService
 
     private function processImage(string $fileContents): array
     {
-        $manager = new ImageManager(new GdDriver());
-        $image = $manager->read($fileContents);
+        $source = @imagecreatefromstring($fileContents);
 
-        // Fix EXIF orientation is handled automatically by Intervention v3
+        if ($source === false) {
+            throw new \RuntimeException('Could not read image data.');
+        }
+
+        // Fix EXIF orientation for JPEG
+        $source = $this->fixExifOrientation($source, $fileContents);
+
+        $width = imagesx($source);
+        $height = imagesy($source);
 
         // Resize if exceeds max width, maintaining aspect ratio
-        if ($image->width() > self::MAX_IMAGE_WIDTH) {
-            $image->scaleDown(width: self::MAX_IMAGE_WIDTH);
+        if ($width > self::MAX_IMAGE_WIDTH) {
+            $newWidth = self::MAX_IMAGE_WIDTH;
+            $newHeight = (int) round($height * ($newWidth / $width));
+
+            $resized = imagecreatetruecolor($newWidth, $newHeight);
+            imagealphablending($resized, false);
+            imagesavealpha($resized, true);
+            imagecopyresampled($resized, $source, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
+            imagedestroy($source);
+            $source = $resized;
         }
 
         // Encode as WebP
-        $encoded = $image->toWebp(quality: self::IMAGE_QUALITY);
+        ob_start();
+        imagewebp($source, null, self::WEBP_QUALITY);
+        $encoded = ob_get_clean();
+        imagedestroy($source);
 
-        return [(string) $encoded, 'webp', 'image/webp'];
+        return [$encoded, 'webp', 'image/webp'];
+    }
+
+    private function fixExifOrientation(\GdImage $image, string $fileContents): \GdImage
+    {
+        if (!function_exists('exif_read_data')) {
+            return $image;
+        }
+
+        try {
+            $stream = fopen('php://memory', 'r+');
+            fwrite($stream, $fileContents);
+            rewind($stream);
+            $exif = @exif_read_data($stream);
+            fclose($stream);
+        } catch (\Throwable) {
+            return $image;
+        }
+
+        if (empty($exif['Orientation'])) {
+            return $image;
+        }
+
+        return match ((int) $exif['Orientation']) {
+            3 => imagerotate($image, 180, 0) ?: $image,
+            6 => imagerotate($image, -90, 0) ?: $image,
+            8 => imagerotate($image, 90, 0) ?: $image,
+            default => $image,
+        };
     }
 
     private function buildStoragePath(Attachment $attachment, string $storedName): string
