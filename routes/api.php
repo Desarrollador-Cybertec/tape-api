@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AreaController;
+use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AutomationController;
 use App\Http\Controllers\DashboardController;
@@ -80,6 +81,13 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Import (superadmin)
     Route::post('/import/tasks', [ImportController::class, 'importTasks']);
+
+    // Attachments (Supabase S3)
+    Route::post('/attachments', [AttachmentController::class, 'store']);
+    Route::get('/tasks/{task}/attachments-v2', [AttachmentController::class, 'taskAttachments']);
+    Route::get('/areas/{area}/attachments', [AttachmentController::class, 'areaAttachments']);
+    Route::get('/attachments/{attachment}/signed-url', [AttachmentController::class, 'signedUrl']);
+    Route::delete('/attachments/{attachment}', [AttachmentController::class, 'destroy']);
 
     // Notifications
     Route::get('/notifications', [NotificationController::class, 'index']);
