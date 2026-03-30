@@ -44,8 +44,12 @@ class AttachmentProcessingService
             'is_image' => $attachment->isImage(),
         ]));
 
-        // Step 4: Process image if applicable
-        if ($attachment->isImage() && $this->isProcessableImage($mimeType)) {
+        // Step 4: Process image if applicable (only if processable type AND >= 1MB)
+        $shouldProcess = $attachment->isImage()
+            && $this->isProcessableImage($mimeType)
+            && $fileSize >= 1_048_576;
+
+        if ($shouldProcess) {
             Log::info('[Attachment] Step 4/7: Processing image (GD)', $context);
 
             try {
@@ -64,7 +68,13 @@ class AttachmentProcessingService
                 $fileContents = $localDisk->get($tmpPath);
             }
         } else {
-            Log::info('[Attachment] Step 4/7: Skipped (not processable image)', $context);
+            $reason = !$attachment->isImage()
+                ? 'not an image'
+                : (!$this->isProcessableImage($mimeType) ? 'unsupported mime type' : 'under 1MB, skipping processing');
+            Log::info('[Attachment] Step 4/7: Skipped — ' . $reason, array_merge($context, [
+                'size_bytes' => $fileSize,
+                'size_mb' => round($fileSize / 1_048_576, 2),
+            ]));
         }
 
         // Step 5: Build storage path
@@ -148,23 +158,29 @@ class AttachmentProcessingService
 
     private function processImage(string $fileContents): array
     {
+        Log::info('[Attachment] processImage: creating GD resource from string (' . strlen($fileContents) . ' bytes)');
+
         $source = @imagecreatefromstring($fileContents);
 
         if ($source === false) {
-            throw new \RuntimeException('Could not read image data.');
+            throw new \RuntimeException('Could not read image data with GD.');
         }
+
+        Log::info('[Attachment] processImage: GD resource created OK');
 
         // Fix EXIF orientation for JPEG
         $source = $this->fixExifOrientation($source, $fileContents);
 
         $width = imagesx($source);
         $height = imagesy($source);
+        Log::info("[Attachment] processImage: dimensions {$width}x{$height}");
 
         // Resize if exceeds max width, maintaining aspect ratio
         if ($width > self::MAX_IMAGE_WIDTH) {
             $newWidth = self::MAX_IMAGE_WIDTH;
             $newHeight = (int) round($height * ($newWidth / $width));
 
+            Log::info("[Attachment] processImage: resizing to {$newWidth}x{$newHeight}");
             $resized = imagecreatetruecolor($newWidth, $newHeight);
             imagealphablending($resized, false);
             imagesavealpha($resized, true);
@@ -173,13 +189,32 @@ class AttachmentProcessingService
             $source = $resized;
         }
 
-        // Encode as WebP
+        // Check WebP support and encode
+        $supportsWebp = function_exists('imagewebp') && (imagetypes() & IMG_WEBP);
+        Log::info('[Attachment] processImage: WebP support = ' . ($supportsWebp ? 'yes' : 'no'));
+
+        if ($supportsWebp) {
+            ob_start();
+            $ok = @imagewebp($source, null, self::WEBP_QUALITY);
+            $encoded = ob_get_clean();
+
+            if ($ok && strlen($encoded) > 0) {
+                imagedestroy($source);
+                Log::info('[Attachment] processImage: encoded as WebP (' . strlen($encoded) . ' bytes)');
+                return [$encoded, 'webp', 'image/webp'];
+            }
+
+            Log::warning('[Attachment] processImage: WebP encoding failed, falling back to JPEG');
+        }
+
+        // Fallback: encode as JPEG
         ob_start();
-        imagewebp($source, null, self::WEBP_QUALITY);
+        imagejpeg($source, null, self::WEBP_QUALITY);
         $encoded = ob_get_clean();
         imagedestroy($source);
 
-        return [$encoded, 'webp', 'image/webp'];
+        Log::info('[Attachment] processImage: encoded as JPEG (' . strlen($encoded) . ' bytes)');
+        return [$encoded, 'jpg', 'image/jpeg'];
     }
 
     private function fixExifOrientation(\GdImage $image, string $fileContents): \GdImage
