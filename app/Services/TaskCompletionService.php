@@ -83,7 +83,8 @@ class TaskCompletionService
     {
         $errors = [];
 
-        if ($task->requires_attachment && $task->attachments()->count() === 0) {
+        $hasAttachment = $task->attachments()->exists() || $task->uploadedAttachments()->exists();
+        if ($task->requires_attachment && !$hasAttachment) {
             $errors['attachments'] = ['Se requiere al menos un adjunto para cerrar esta tarea.'];
         }
 

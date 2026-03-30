@@ -160,6 +160,11 @@ class Task extends Model
         return $this->hasMany(TaskAttachment::class);
     }
 
+    public function uploadedAttachments(): HasMany
+    {
+        return $this->hasMany(Attachment::class);
+    }
+
     public function delegations(): HasMany
     {
         return $this->hasMany(TaskDelegation::class);
