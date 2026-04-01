@@ -156,6 +156,17 @@ class TaskPolicy
             return !$this->isForeignPersonalTask($user, $task);
         }
 
+        // Area manager can cancel tasks in their area
+        if ($task->area_id && $user->isManagerOfArea($task->area_id)) {
+            return true;
+        }
+
+        // Current responsible (worker or manager) can cancel the task assigned to them
+        if ($task->current_responsible_user_id === $user->id) {
+            return true;
+        }
+
+        // Creator can cancel their own tasks
         return $task->created_by === $user->id;
     }
 
