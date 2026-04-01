@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Enums\AttachmentTypeEnum;
+use App\Events\TaskAttachmentAdded;
 use App\Events\TaskCommentAdded;
+use App\Events\TaskUpdateAdded;
 use App\Http\Requests\ApproveTaskRequest;
 use App\Http\Requests\DelegateTaskRequest;
 use App\Http\Requests\RejectTaskRequest;
@@ -294,6 +296,8 @@ class TaskController extends Controller
             'attachment_type' => $validated['attachment_type'] ?? AttachmentTypeEnum::SUPPORT->value,
         ]);
 
+        event(new TaskAttachmentAdded($task, $request->user(), $file->getClientOriginalName()));
+
         return response()->json(
             new TaskAttachmentResource($attachment->load('uploader')),
             201
@@ -315,6 +319,8 @@ class TaskController extends Controller
         if (isset($validated['progress_percent'])) {
             $task->update(['progress_percent' => $validated['progress_percent']]);
         }
+
+        event(new TaskUpdateAdded($task, $update, $request->user()));
 
         return response()->json(
             new TaskUpdateResource($update->load('user')),

@@ -10,6 +10,9 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 
 class SendTaskAssignedNotification implements ShouldQueue
 {
+    /** Run after the DB transaction commits so a mail failure cannot roll back the assignment. */
+    public bool $afterCommit = true;
+
     public function handle(TaskAssigned $event): void
     {
         $task = $event->task;

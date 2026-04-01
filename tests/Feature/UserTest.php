@@ -208,4 +208,61 @@ class UserTest extends TestCase
         $ids = collect($response->json('data'))->pluck('id');
         $this->assertContains($workerInArea1->id, $ids->toArray());
     }
+
+    // ── Update Password ──
+
+    public function test_superadmin_can_update_user_password(): void
+    {
+        $admin = $this->createUser(RoleEnum::SUPERADMIN);
+        $worker = $this->createUser(RoleEnum::WORKER);
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->patchJson("/api/users/{$worker->id}/password", [
+                'password' => 'NewPassword1',
+                'password_confirmation' => 'NewPassword1',
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('message', 'Contraseña actualizada correctamente.');
+
+        $this->assertTrue(Hash::check('NewPassword1', $worker->fresh()->password));
+    }
+
+    public function test_worker_cannot_update_another_users_password(): void
+    {
+        $worker1 = $this->createUser(RoleEnum::WORKER);
+        $worker2 = $this->createUser(RoleEnum::WORKER);
+
+        $this->actingAs($worker1, 'sanctum')
+            ->patchJson("/api/users/{$worker2->id}/password", [
+                'password' => 'NewPassword1',
+                'password_confirmation' => 'NewPassword1',
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_superadmin_cannot_update_own_password_via_admin_endpoint(): void
+    {
+        $admin = $this->createUser(RoleEnum::SUPERADMIN);
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson("/api/users/{$admin->id}/password", [
+                'password' => 'NewPassword1',
+                'password_confirmation' => 'NewPassword1',
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_update_password_validates_strength(): void
+    {
+        $admin = $this->createUser(RoleEnum::SUPERADMIN);
+        $worker = $this->createUser(RoleEnum::WORKER);
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson("/api/users/{$worker->id}/password", [
+                'password' => 'weak',
+                'password_confirmation' => 'weak',
+            ])
+            ->assertUnprocessable();
+    }
 }

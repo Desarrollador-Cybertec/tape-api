@@ -485,7 +485,7 @@ class TaskTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->admin, 'sanctum')
-            ->postJson("/api/tasks/{$task->id}/cancel");
+            ->postJson("/api/tasks/{$task->id}/cancel", ['comment' => 'Se cancela la tarea.']);
 
         $response->assertOk();
         $this->assertEquals(TaskStatusEnum::CANCELLED, $task->fresh()->status);
@@ -505,7 +505,7 @@ class TaskTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->admin, 'sanctum')
-            ->postJson("/api/tasks/{$task->id}/reopen", ['note' => 'Se requiere ajuste']);
+            ->postJson("/api/tasks/{$task->id}/reopen", ['comment' => 'Se requiere ajuste']);
 
         $response->assertOk();
         $fresh = $task->fresh();
@@ -527,7 +527,7 @@ class TaskTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->manager, 'sanctum')
-            ->postJson("/api/tasks/{$task->id}/reopen");
+            ->postJson("/api/tasks/{$task->id}/reopen", ['comment' => 'Requiere revisión adicional.']);
 
         $response->assertOk();
         $this->assertEquals(TaskStatusEnum::IN_PROGRESS, $task->fresh()->status);
@@ -543,7 +543,7 @@ class TaskTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->admin, 'sanctum')
-            ->postJson("/api/tasks/{$task->id}/reopen");
+            ->postJson("/api/tasks/{$task->id}/reopen", ['comment' => 'Se reabre la tarea cancelada.']);
 
         $response->assertOk();
         $fresh = $task->fresh();
@@ -565,7 +565,7 @@ class TaskTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->worker, 'sanctum')
-            ->postJson("/api/tasks/{$task->id}/reopen");
+            ->postJson("/api/tasks/{$task->id}/reopen", ['comment' => 'Necesito ajustes.']);
 
         $response->assertOk();
         $fresh = $task->fresh();

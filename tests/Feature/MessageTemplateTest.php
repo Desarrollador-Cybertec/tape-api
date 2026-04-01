@@ -140,4 +140,72 @@ class MessageTemplateTest extends TestCase
 
         $response->assertUnprocessable();
     }
+
+    // ── Store ──
+
+    public function test_superadmin_can_create_template(): void
+    {
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/message-templates', [
+                'slug'    => 'custom_template',
+                'name'    => 'Plantilla personalizada',
+                'subject' => 'Asunto personalizado',
+                'body'    => 'Cuerpo del mensaje personalizado.',
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.slug', 'custom_template');
+
+        $this->assertDatabaseHas('message_templates', ['slug' => 'custom_template']);
+    }
+
+    public function test_worker_cannot_create_template(): void
+    {
+        $this->actingAs($this->worker, 'sanctum')
+            ->postJson('/api/message-templates', [
+                'slug'    => 'worker_template',
+                'name'    => 'Plantilla worker',
+                'subject' => 'Asunto',
+                'body'    => 'Cuerpo.',
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_create_template_requires_unique_slug(): void
+    {
+        $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/message-templates', [
+                'slug'    => 'new_assignment', // already exists in setUp
+                'name'    => 'Duplicada',
+                'subject' => 'Asunto',
+                'body'    => 'Cuerpo.',
+            ])
+            ->assertUnprocessable();
+    }
+
+    // ── Destroy ──
+
+    public function test_superadmin_can_delete_template(): void
+    {
+        $extra = MessageTemplate::create([
+            'slug'    => 'to_delete',
+            'name'    => 'A eliminar',
+            'subject' => 'Asunto',
+            'body'    => 'Cuerpo.',
+            'active'  => true,
+        ]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->deleteJson("/api/message-templates/{$extra->id}");
+
+        $response->assertNoContent();
+        $this->assertModelMissing($extra);
+    }
+
+    public function test_worker_cannot_delete_template(): void
+    {
+        $this->actingAs($this->worker, 'sanctum')
+            ->deleteJson("/api/message-templates/{$this->template->id}")
+            ->assertForbidden();
+    }
 }

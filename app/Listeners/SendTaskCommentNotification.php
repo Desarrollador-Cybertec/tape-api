@@ -9,6 +9,9 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 
 class SendTaskCommentNotification implements ShouldQueue
 {
+    /** Run after the DB transaction commits so a mail failure cannot roll back the comment. */
+    public bool $afterCommit = true;
+
     public function handle(TaskCommentAdded $event): void
     {
         $task = $event->task;

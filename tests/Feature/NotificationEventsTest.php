@@ -413,7 +413,7 @@ class NotificationEventsTest extends TestCase
         ]);
 
         $this->actingAs($this->admin, 'sanctum')
-            ->postJson("/api/tasks/{$task->id}/cancel");
+            ->postJson("/api/tasks/{$task->id}/cancel", ['comment' => 'Se cancela la tarea.']);
 
         Notification::assertSentTo($this->worker, TaskCancelledNotification::class);
     }
@@ -430,7 +430,7 @@ class NotificationEventsTest extends TestCase
         ]);
 
         $this->actingAs($this->worker, 'sanctum')
-            ->postJson("/api/tasks/{$task->id}/cancel");
+            ->postJson("/api/tasks/{$task->id}/cancel", ['comment' => 'Cancelo mi propia tarea.']);
 
         Notification::assertNotSentTo($this->worker, TaskCancelledNotification::class);
     }
@@ -452,7 +452,7 @@ class NotificationEventsTest extends TestCase
         ]);
 
         $this->actingAs($this->admin, 'sanctum')
-            ->postJson("/api/tasks/{$task->id}/reopen", ['note' => 'Requiere ajustes']);
+            ->postJson("/api/tasks/{$task->id}/reopen", ['comment' => 'Requiere ajustes']);
 
         Notification::assertSentTo($this->worker, TaskReopenedNotification::class, function ($notification) {
             return $notification->note === 'Requiere ajustes';
@@ -473,7 +473,7 @@ class NotificationEventsTest extends TestCase
         ]);
 
         $this->actingAs($this->admin, 'sanctum')
-            ->postJson("/api/tasks/{$task->id}/reopen");
+            ->postJson("/api/tasks/{$task->id}/reopen", ['comment' => 'Se reabre la tarea.']);
 
         Notification::assertSentTo($this->worker, TaskReopenedNotification::class);
     }
@@ -538,5 +538,142 @@ class NotificationEventsTest extends TestCase
         $data = $notification->toArray($this->worker);
 
         $this->assertEquals('personal', $data['category']);
+    }
+
+    // ── TaskStarted ──
+
+    public function test_start_task_notifies_assigner(): void
+    {
+        Notification::fake();
+
+        $task = Task::create([
+            'title' => 'Tarea por iniciar',
+            'created_by' => $this->admin->id,
+            'assigned_by' => $this->admin->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::PENDING,
+        ]);
+
+        $this->actingAs($this->worker, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/start");
+
+        Notification::assertSentTo($this->admin, \App\Notifications\TaskStartedNotification::class);
+        Notification::assertNotSentTo($this->worker, \App\Notifications\TaskStartedNotification::class);
+    }
+
+    public function test_start_task_does_not_notify_self_starter(): void
+    {
+        Notification::fake();
+
+        // Worker creates and self-assigns task, then starts it → no notification
+        $task = Task::create([
+            'title' => 'Tarea propia',
+            'created_by' => $this->worker->id,
+            'assigned_by' => $this->worker->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'status' => TaskStatusEnum::PENDING,
+        ]);
+
+        $this->actingAs($this->worker, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/start");
+
+        Notification::assertNotSentTo($this->worker, \App\Notifications\TaskStartedNotification::class);
+    }
+
+    public function test_reopen_from_completed_still_sends_reopen_not_started(): void
+    {
+        Notification::fake();
+
+        $task = Task::create([
+            'title' => 'Tarea completada',
+            'created_by' => $this->admin->id,
+            'assigned_by' => $this->admin->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::COMPLETED,
+            'completed_at' => now(),
+            'closed_by' => $this->manager->id,
+        ]);
+
+        $this->actingAs($this->admin, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/reopen", ['comment' => 'Requiere ajustes']);
+
+        Notification::assertSentTo($this->worker, \App\Notifications\TaskReopenedNotification::class);
+        Notification::assertNotSentTo($this->worker, \App\Notifications\TaskStartedNotification::class);
+    }
+
+    // ── TaskUpdateAdded ──
+
+    public function test_adding_update_notifies_creator(): void
+    {
+        Notification::fake();
+
+        $task = Task::create([
+            'title' => 'Tarea con avances',
+            'created_by' => $this->admin->id,
+            'assigned_by' => $this->admin->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::IN_PROGRESS,
+        ]);
+
+        $this->actingAs($this->worker, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/updates", [
+                'update_type' => 'progress',
+                'comment' => 'Avanzando bien',
+            ]);
+
+        Notification::assertSentTo($this->admin, \App\Notifications\TaskUpdateAddedNotification::class);
+        Notification::assertNotSentTo($this->worker, \App\Notifications\TaskUpdateAddedNotification::class);
+    }
+
+    public function test_adding_update_does_not_notify_self(): void
+    {
+        Notification::fake();
+
+        $task = Task::create([
+            'title' => 'Tarea propia',
+            'created_by' => $this->worker->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'status' => TaskStatusEnum::IN_PROGRESS,
+        ]);
+
+        $this->actingAs($this->worker, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/updates", [
+                'update_type' => 'progress',
+                'comment' => 'Yo mismo trabajo en esto',
+            ]);
+
+        Notification::assertNotSentTo($this->worker, \App\Notifications\TaskUpdateAddedNotification::class);
+    }
+
+    // ── TaskAttachmentAdded ──
+
+    public function test_adding_attachment_notifies_creator(): void
+    {
+        Notification::fake();
+
+        $task = Task::create([
+            'title' => 'Tarea con adjuntos',
+            'created_by' => $this->admin->id,
+            'assigned_by' => $this->admin->id,
+            'current_responsible_user_id' => $this->worker->id,
+            'area_id' => $this->area->id,
+            'status' => TaskStatusEnum::IN_PROGRESS,
+        ]);
+
+        // Simulate fake file upload (bypasses actual storage)
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $file = \Illuminate\Http\UploadedFile::fake()->create('evidencia.pdf', 100, 'application/pdf');
+
+        $this->actingAs($this->worker, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/attachments", [
+                'file' => $file,
+                'attachment_type' => 'evidence',
+            ]);
+
+        Notification::assertSentTo($this->admin, \App\Notifications\TaskAttachmentAddedNotification::class);
+        Notification::assertNotSentTo($this->worker, \App\Notifications\TaskAttachmentAddedNotification::class);
     }
 }

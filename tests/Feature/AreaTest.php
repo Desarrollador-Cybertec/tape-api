@@ -3,9 +3,11 @@
 namespace Tests\Feature;
 
 use App\Enums\RoleEnum;
+use App\Enums\TaskStatusEnum;
 use App\Models\Area;
 use App\Models\AreaMember;
 use App\Models\Role;
+use App\Models\Task;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -303,6 +305,51 @@ class AreaTest extends TestCase
 
         $this->actingAs($worker, 'sanctum')
             ->getJson("/api/areas/{$area->id}/members")
+            ->assertForbidden();
+    }
+
+    // ── Destroy ──
+
+    public function test_superadmin_can_delete_area(): void
+    {
+        $admin = $this->createUser(RoleEnum::SUPERADMIN);
+        $area = Area::create(['name' => 'Área a Eliminar']);
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->deleteJson("/api/areas/{$area->id}");
+
+        $response->assertOk()
+            ->assertJsonPath('message', 'Área eliminada correctamente.');
+
+        $this->assertModelMissing($area);
+    }
+
+    public function test_superadmin_cannot_delete_area_with_tasks(): void
+    {
+        $admin = $this->createUser(RoleEnum::SUPERADMIN);
+        $area = Area::create(['name' => 'Área con Tareas']);
+
+        Task::create([
+            'title' => 'Tarea del área',
+            'created_by' => $admin->id,
+            'area_id' => $area->id,
+            'status' => TaskStatusEnum::PENDING,
+        ]);
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->deleteJson("/api/areas/{$area->id}");
+
+        $response->assertUnprocessable();
+        $this->assertModelExists($area);
+    }
+
+    public function test_worker_cannot_delete_area(): void
+    {
+        $worker = $this->createUser(RoleEnum::WORKER);
+        $area = Area::create(['name' => 'Área Protegida']);
+
+        $this->actingAs($worker, 'sanctum')
+            ->deleteJson("/api/areas/{$area->id}")
             ->assertForbidden();
     }
 }

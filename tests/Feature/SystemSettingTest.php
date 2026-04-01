@@ -161,4 +161,73 @@ class SystemSettingTest extends TestCase
         $this->assertArrayHasKey('alert_days_before_due', $group);
         $this->assertArrayNotHasKey('detect_overdue_time', $group);
     }
+
+    // ── Store ──
+
+    public function test_superadmin_can_create_setting(): void
+    {
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/settings', [
+                'key'   => 'new_custom_setting',
+                'value' => '42',
+                'type'  => 'integer',
+                'group' => 'custom',
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.key', 'new_custom_setting');
+
+        $this->assertDatabaseHas('system_settings', ['key' => 'new_custom_setting']);
+    }
+
+    public function test_worker_cannot_create_setting(): void
+    {
+        $this->actingAs($this->worker, 'sanctum')
+            ->postJson('/api/settings', [
+                'key'   => 'hacked_setting',
+                'value' => '1',
+                'type'  => 'boolean',
+                'group' => 'security',
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_create_setting_requires_unique_key(): void
+    {
+        $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/settings', [
+                'key'   => 'emails_enabled', // already exists
+                'value' => '0',
+                'type'  => 'boolean',
+                'group' => 'notifications',
+            ])
+            ->assertUnprocessable();
+    }
+
+    // ── Destroy ──
+
+    public function test_superadmin_can_delete_setting(): void
+    {
+        $setting = SystemSetting::create([
+            'key'   => 'deletable_setting',
+            'value' => 'test',
+            'type'  => 'string',
+            'group' => 'test',
+        ]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->deleteJson("/api/settings/{$setting->id}");
+
+        $response->assertNoContent();
+        $this->assertModelMissing($setting);
+    }
+
+    public function test_worker_cannot_delete_setting(): void
+    {
+        $setting = SystemSetting::where('key', 'emails_enabled')->first();
+
+        $this->actingAs($this->worker, 'sanctum')
+            ->deleteJson("/api/settings/{$setting->id}")
+            ->assertForbidden();
+    }
 }

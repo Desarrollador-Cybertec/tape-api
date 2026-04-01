@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreAttachmentRequest;
 use App\Http\Resources\AttachmentResource;
+use App\Events\TaskAttachmentAdded;
 use App\Models\Attachment;
 use App\Models\Area;
 use App\Models\Task;
@@ -31,6 +32,14 @@ class AttachmentController extends Controller
             taskId: $validated['task_id'] ?? null,
             areaId: $validated['area_id'] ?? null,
         );
+
+        // Notify task participants when a file is attached to a task
+        if (!empty($validated['task_id'])) {
+            $task = \App\Models\Task::find($validated['task_id']);
+            if ($task) {
+                event(new TaskAttachmentAdded($task, $request->user(), $request->file('file')->getClientOriginalName()));
+            }
+        }
 
         return response()->json([
             'message' => 'Archivo recibido y enviado a procesamiento.',
