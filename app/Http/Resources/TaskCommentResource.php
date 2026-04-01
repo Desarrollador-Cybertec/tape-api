@@ -13,6 +13,7 @@ class TaskCommentResource extends JsonResource
             'id' => $this->id,
             'comment' => $this->comment,
             'type' => $this->type,
+            'type_label' => $this->type?->label(),
             'user' => new UserResource($this->whenLoaded('user')),
             'created_at' => $this->created_at,
         ];

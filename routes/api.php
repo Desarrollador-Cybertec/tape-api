@@ -27,10 +27,12 @@ Route::middleware('auth:sanctum')->group(function () {
     // Users
     Route::apiResource('users', UserController::class)->except(['destroy']);
     Route::patch('/users/{user}/role', [UserController::class, 'updateRole']);
+    Route::patch('/users/{user}/password', [UserController::class, 'updatePassword']);
     Route::patch('/users/{user}/toggle-active', [UserController::class, 'toggleActive']);
 
     // Areas
     Route::apiResource('areas', AreaController::class)->except(['destroy']);
+    Route::delete('/areas/{area}', [AreaController::class, 'destroy']);
     Route::patch('/areas/{area}/manager', [AreaController::class, 'assignManager']);
     Route::post('/areas/claim-worker', [AreaController::class, 'claimWorker']);
     Route::get('/areas/{area}/available-workers', [AreaController::class, 'availableWorkers']);

@@ -35,6 +35,11 @@ class AreaPolicy
         return $user->isSuperAdmin();
     }
 
+    public function delete(User $user, Area $area): bool
+    {
+        return $user->isSuperAdmin();
+    }
+
     public function assignManager(User $user, Area $area): bool
     {
         return $user->isSuperAdmin();

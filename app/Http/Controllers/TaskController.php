@@ -233,11 +233,15 @@ class TaskController extends Controller
         return response()->json(['message' => 'Tarea eliminada correctamente.']);
     }
 
-    public function cancel(Task $task, TaskStatusService $service): TaskResource
+    public function cancel(Request $request, Task $task, TaskStatusService $service): TaskResource
     {
         $this->authorize('cancel', $task);
 
-        $task = $service->cancel($task, request()->user());
+        $validated = $request->validate([
+            'comment' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $task = $service->cancel($task, $request->user(), $validated['comment']);
 
         return new TaskResource($task->load(['currentResponsible', 'area', 'latestUpdate']));
     }
@@ -247,10 +251,10 @@ class TaskController extends Controller
         $this->authorize('reopen', $task);
 
         $validated = $request->validate([
-            'note' => ['nullable', 'string', 'max:2000'],
+            'comment' => ['required', 'string', 'max:2000'],
         ]);
 
-        $task = $service->reopen($task, $request->user(), $validated['note'] ?? null);
+        $task = $service->reopen($task, $request->user(), $validated['comment']);
 
         return new TaskResource($task->load(['currentResponsible', 'area', 'latestUpdate']));
     }

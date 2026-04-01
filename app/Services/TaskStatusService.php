@@ -2,10 +2,13 @@
 
 namespace App\Services;
 
+use App\Enums\CommentTypeEnum;
 use App\Enums\TaskStatusEnum;
+use App\Events\TaskCommentAdded;
 use App\Events\TaskStatusChanged;
 use App\Models\ActivityLog;
 use App\Models\Task;
+use App\Models\TaskComment;
 use App\Models\TaskStatusHistory;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -71,18 +74,38 @@ class TaskStatusService
         return $this->transition($task, TaskStatusEnum::IN_PROGRESS, $user, 'Tarea iniciada');
     }
 
-    public function cancel(Task $task, User $user): Task
+    public function cancel(Task $task, User $user, string $reason): Task
     {
-        return $this->transition($task, TaskStatusEnum::CANCELLED, $user, 'Tarea cancelada');
+        return DB::transaction(function () use ($task, $user, $reason) {
+            $comment = TaskComment::create([
+                'task_id' => $task->id,
+                'user_id' => $user->id,
+                'comment' => $reason,
+                'type'    => CommentTypeEnum::CANCELLATION_NOTE,
+            ]);
+
+            event(new TaskCommentAdded($task, $comment, $user));
+
+            return $this->transition($task, TaskStatusEnum::CANCELLED, $user, $reason);
+        });
     }
 
-    public function reopen(Task $task, User $user, ?string $note = null): Task
+    public function reopen(Task $task, User $user, string $reason): Task
     {
         $newStatus = $task->status === TaskStatusEnum::CANCELLED
             ? TaskStatusEnum::PENDING
             : TaskStatusEnum::IN_PROGRESS;
 
-        return DB::transaction(function () use ($task, $newStatus, $user, $note) {
+        return DB::transaction(function () use ($task, $newStatus, $user, $reason) {
+            $comment = TaskComment::create([
+                'task_id' => $task->id,
+                'user_id' => $user->id,
+                'comment' => $reason,
+                'type'    => CommentTypeEnum::REOPEN_NOTE,
+            ]);
+
+            event(new TaskCommentAdded($task, $comment, $user));
+
             // Clear terminal state fields
             $task->update([
                 'completed_at'  => null,
@@ -90,7 +113,7 @@ class TaskStatusService
                 'cancelled_by'  => null,
             ]);
 
-            return $this->transition($task->fresh(), $newStatus, $user, $note ?? 'Tarea reabierta');
+            return $this->transition($task->fresh(), $newStatus, $user, $reason);
         });
     }
 }

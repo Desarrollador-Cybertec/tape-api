@@ -10,6 +10,8 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rules\Password;
 
 class UserController extends Controller
 {
@@ -101,5 +103,18 @@ class UserController extends Controller
         $user->update(['active' => !$user->active]);
 
         return new UserResource($user->fresh(['role', 'activeAreas']));
+    }
+
+    public function updatePassword(Request $request, User $user): JsonResponse
+    {
+        $this->authorize('updatePassword', $user);
+
+        $request->validate([
+            'password' => ['required', 'string', Password::min(8)->mixedCase()->numbers(), 'confirmed'],
+        ]);
+
+        $user->update(['password' => Hash::make($request->password)]);
+
+        return response()->json(['message' => 'Contraseña actualizada correctamente.']);
     }
 }

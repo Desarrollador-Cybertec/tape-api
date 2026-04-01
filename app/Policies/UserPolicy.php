@@ -52,4 +52,9 @@ class UserPolicy
     {
         return $user->isSuperAdmin() && $user->id !== $model->id;
     }
+
+    public function updatePassword(User $user, User $model): bool
+    {
+        return $user->isSuperAdmin() && $user->id !== $model->id;
+    }
 }

@@ -66,6 +66,22 @@ class AreaController extends Controller
         return new AreaResource($area->fresh('manager'));
     }
 
+    public function destroy(Area $area): JsonResponse
+    {
+        $this->authorize('delete', $area);
+
+        if ($area->tasks()->exists()) {
+            return response()->json([
+                'message' => 'No se puede eliminar un área que tiene tareas asociadas.',
+            ], 422);
+        }
+
+        $area->activeMembers()->detach();
+        $area->delete();
+
+        return response()->json(['message' => 'Área eliminada correctamente.']);
+    }
+
     public function assignManager(Request $request, Area $area): AreaResource
     {
         $this->authorize('assignManager', $area);
