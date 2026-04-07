@@ -21,7 +21,7 @@ class ImportController extends Controller
      */
     public function importTasks(Request $request): JsonResponse
     {
-        if (!$request->user()->isSuperAdmin()) {
+        if (!$request->user()->isAdminLevel()) {
             abort(403);
         }
 

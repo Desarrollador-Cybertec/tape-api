@@ -25,7 +25,7 @@ class MeetingController extends Controller
 
         $meetings = Meeting::with(['area', 'creator'])
             ->withCount('tasks')
-            ->when(!$user->isSuperAdmin(), function ($q) use ($user) {
+            ->when(!$user->isAdminLevel(), function ($q) use ($user) {
                 $q->where(function ($query) use ($user) {
                     $query->where('created_by', $user->id)
                         ->orWhereIn('area_id', Area::where('manager_user_id', $user->id)->select('id'));
@@ -91,9 +91,36 @@ class MeetingController extends Controller
         return response()->json(['message' => 'Reunión eliminada exitosamente.']);
     }
 
+    public function close(Meeting $meeting): JsonResponse
+    {
+        $this->authorize('close', $meeting);
+
+        $meeting->update([
+            'is_closed' => true,
+            'closed_at' => now(),
+        ]);
+
+        ActivityLog::create([
+            'user_id' => request()->user()->id,
+            'module' => 'meetings',
+            'action' => 'closed',
+            'subject_type' => Meeting::class,
+            'subject_id' => $meeting->id,
+            'description' => "Reunión \"{$meeting->title}\" cerrada",
+        ]);
+
+        return response()->json(
+            new MeetingResource($meeting->fresh(['area', 'creator']))
+        );
+    }
+
     public function storeTasks(StoreMeetingTasksRequest $request, Meeting $meeting, TaskCreationService $service): JsonResponse
     {
         $this->authorize('view', $meeting);
+
+        if ($meeting->is_closed) {
+            return response()->json(['message' => 'No se pueden agregar tareas a una reunión cerrada.'], 422);
+        }
 
         $createdTasks = [];
 

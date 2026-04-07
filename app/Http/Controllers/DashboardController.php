@@ -14,7 +14,7 @@ class DashboardController extends Controller
 {
     public function general(Request $request): JsonResponse
     {
-        if (!$request->user()->isSuperAdmin()) {
+        if (!$request->user()->isAdminLevel()) {
             abort(403);
         }
 
@@ -122,7 +122,7 @@ class DashboardController extends Controller
     {
         $user = $request->user();
 
-        if (!$user->isSuperAdmin() && !$user->isManagerOfArea($area->id)) {
+        if (!$user->isAdminLevel() && !$user->isManagerOfArea($area->id)) {
             abort(403);
         }
 
@@ -264,7 +264,7 @@ class DashboardController extends Controller
      */
     public function consolidated(Request $request): JsonResponse
     {
-        if (!$request->user()->isSuperAdmin()) {
+        if (!$request->user()->isAdminLevel()) {
             abort(403);
         }
 

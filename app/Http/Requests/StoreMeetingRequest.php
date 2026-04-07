@@ -10,7 +10,7 @@ class StoreMeetingRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()->isSuperAdmin() || $this->user()->isAreaManager();
+        return $this->user()->isAdminLevel() || $this->user()->isManagerLevel();
     }
 
     public function rules(): array

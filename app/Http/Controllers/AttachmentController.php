@@ -65,7 +65,7 @@ class AttachmentController extends Controller
         $user = $request->user();
 
         abort_unless(
-            $user->isSuperAdmin() || $user->isManagerOfArea($area->id) || $user->belongsToArea($area->id),
+            $user->isAdminLevel() || $user->isManagerOfArea($area->id) || $user->belongsToArea($area->id),
             403,
             'No autorizado.'
         );

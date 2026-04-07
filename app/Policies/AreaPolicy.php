@@ -9,12 +9,12 @@ class AreaPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->isSuperAdmin() || $user->isAreaManager() || $user->isWorker();
+        return $user->isAdminLevel() || $user->isManagerLevel() || $user->isWorkerLevel();
     }
 
     public function view(User $user, Area $area): bool
     {
-        if ($user->isSuperAdmin()) {
+        if ($user->isAdminLevel()) {
             return true;
         }
 
@@ -27,27 +27,27 @@ class AreaPolicy
 
     public function create(User $user): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isAdminLevel();
     }
 
     public function update(User $user, Area $area): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isAdminLevel();
     }
 
     public function delete(User $user, Area $area): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isAdminLevel();
     }
 
     public function assignManager(User $user, Area $area): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isAdminLevel();
     }
 
     public function claimWorker(User $user, Area $area): bool
     {
-        if ($user->isSuperAdmin()) {
+        if ($user->isAdminLevel()) {
             return true;
         }
 
@@ -56,7 +56,7 @@ class AreaPolicy
 
     public function availableWorkers(User $user, Area $area): bool
     {
-        if ($user->isSuperAdmin()) {
+        if ($user->isAdminLevel()) {
             return true;
         }
 

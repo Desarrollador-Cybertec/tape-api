@@ -8,12 +8,12 @@ class UserPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->isSuperAdmin() || $user->isAreaManager();
+        return $user->isAdminLevel() || $user->isManagerLevel();
     }
 
     public function view(User $user, User $model): bool
     {
-        if ($user->isSuperAdmin()) {
+        if ($user->isAdminLevel()) {
             return true;
         }
 
@@ -21,7 +21,7 @@ class UserPolicy
             return true;
         }
 
-        if ($user->isAreaManager()) {
+        if ($user->isManagerLevel()) {
             $managedAreaIds = $user->managedAreas()->pluck('id');
             return $model->activeAreas()->whereIn('areas.id', $managedAreaIds)->exists();
         }
@@ -31,12 +31,12 @@ class UserPolicy
 
     public function create(User $user): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isAdminLevel();
     }
 
     public function update(User $user, User $model): bool
     {
-        if ($user->isSuperAdmin()) {
+        if ($user->isAdminLevel()) {
             return true;
         }
 
@@ -45,7 +45,7 @@ class UserPolicy
 
     public function updateRole(User $user, User $model): bool
     {
-        return $user->isSuperAdmin() && $user->id !== $model->id;
+        return $user->isAdminLevel() && $user->id !== $model->id;
     }
 
     public function delete(User $user, User $model): bool
@@ -55,6 +55,6 @@ class UserPolicy
 
     public function updatePassword(User $user, User $model): bool
     {
-        return $user->isSuperAdmin() && $user->id !== $model->id;
+        return $user->isAdminLevel() && $user->id !== $model->id;
     }
 }

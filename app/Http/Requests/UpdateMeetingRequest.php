@@ -10,7 +10,7 @@ class UpdateMeetingRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()->isSuperAdmin() || $this->user()->id === $this->route('meeting')->created_by;
+        return $this->user()->isAdminLevel() || $this->user()->id === $this->route('meeting')->created_by;
     }
 
     public function rules(): array

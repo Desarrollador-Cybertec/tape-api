@@ -78,16 +78,18 @@ class UserController extends Controller
         \Illuminate\Support\Facades\DB::transaction(function () use ($user, $request, $newRole) {
             $user->update(['role_id' => $request->role_id]);
 
-            // When promoting to area_manager, remove active worker memberships
-            if ($newRole?->slug === \App\Enums\RoleEnum::AREA_MANAGER->value) {
+            // When promoting to manager level, remove active worker memberships
+            if (in_array($newRole?->slug, collect(\App\Enums\RoleEnum::managerLevel())->map(fn ($r) => $r->value)->toArray())) {
                 \App\Models\AreaMember::where('user_id', $user->id)
                     ->where('is_active', true)
                     ->update(['is_active' => false, 'left_at' => now()]);
             }
 
-            // When demoting from area_manager to worker, remove them as manager from areas
-            if ($user->role?->slug === \App\Enums\RoleEnum::AREA_MANAGER->value
-                && $newRole?->slug === \App\Enums\RoleEnum::WORKER->value) {
+            // When demoting from manager level to worker level, remove them as manager from areas
+            $managerSlugs = collect(\App\Enums\RoleEnum::managerLevel())->map(fn ($r) => $r->value)->toArray();
+            $workerSlugs = collect(\App\Enums\RoleEnum::workerLevel())->map(fn ($r) => $r->value)->toArray();
+            if (in_array($user->role?->slug, $managerSlugs)
+                && in_array($newRole?->slug, $workerSlugs)) {
                 \App\Models\Area::where('manager_user_id', $user->id)
                     ->update(['manager_user_id' => null]);
             }

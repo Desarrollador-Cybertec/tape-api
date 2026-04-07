@@ -38,7 +38,7 @@ class TaskPolicy
 
     public function view(User $user, Task $task): bool
     {
-        if ($user->isSuperAdmin()) {
+        if ($user->isAdminLevel()) {
             return !$this->isForeignPersonalTask($user, $task);
         }
 
@@ -59,10 +59,12 @@ class TaskPolicy
 
         // Area task: user currently manages this area (worker-created tasks are personal so have no area_id)
         if ($user->isManagerOfArea($task->area_id)) {
+            $workerLevelSlugs = collect(RoleEnum::workerLevel())
+                ->map(fn ($r) => $r->value)->toArray();
             return !DB::table('users')
                 ->join('roles', 'users.role_id', '=', 'roles.id')
                 ->where('users.id', $task->created_by)
-                ->where('roles.slug', RoleEnum::WORKER->value)
+                ->whereIn('roles.slug', $workerLevelSlugs)
                 ->exists();
         }
 
@@ -76,7 +78,7 @@ class TaskPolicy
 
     public function update(User $user, Task $task): bool
     {
-        if ($user->isSuperAdmin()) {
+        if ($user->isAdminLevel()) {
             return !$this->isForeignPersonalTask($user, $task);
         }
 
@@ -94,7 +96,7 @@ class TaskPolicy
 
     public function delegate(User $user, Task $task): bool
     {
-        if ($user->isSuperAdmin()) {
+        if ($user->isAdminLevel()) {
             return !$this->isForeignPersonalTask($user, $task);
         }
 
@@ -103,11 +105,11 @@ class TaskPolicy
         }
 
         return $user->isManagerOfArea($task->area_id)
-            || ($user->isAreaManager() && $task->current_responsible_user_id === $user->id)
+            || ($user->isManagerLevel() && $task->current_responsible_user_id === $user->id)
             // Cross-area: allow if the current responsible belongs to one of the manager's areas
             || $this->isManagerOfUserArea($user, $task->current_responsible_user_id)
             // Creator of the task can delegate it
-            || ($user->isAreaManager() && $task->created_by === $user->id);
+            || ($user->isManagerLevel() && $task->created_by === $user->id);
     }
 
     public function start(User $user, Task $task): bool
@@ -134,7 +136,7 @@ class TaskPolicy
 
     public function approve(User $user, Task $task): bool
     {
-        if ($user->isSuperAdmin()) {
+        if ($user->isAdminLevel()) {
             return !$this->isForeignPersonalTask($user, $task);
         }
 
@@ -143,7 +145,7 @@ class TaskPolicy
 
     public function reject(User $user, Task $task): bool
     {
-        if ($user->isSuperAdmin()) {
+        if ($user->isAdminLevel()) {
             return !$this->isForeignPersonalTask($user, $task);
         }
 
@@ -152,7 +154,7 @@ class TaskPolicy
 
     public function cancel(User $user, Task $task): bool
     {
-        if ($user->isSuperAdmin()) {
+        if ($user->isAdminLevel()) {
             return !$this->isForeignPersonalTask($user, $task);
         }
 
@@ -172,7 +174,7 @@ class TaskPolicy
 
     public function reopen(User $user, Task $task): bool
     {
-        if ($user->isSuperAdmin()) {
+        if ($user->isAdminLevel()) {
             return !$this->isForeignPersonalTask($user, $task);
         }
 
@@ -187,7 +189,7 @@ class TaskPolicy
 
     public function claim(User $user, Task $task): bool
     {
-        if ($user->isSuperAdmin()) {
+        if ($user->isAdminLevel()) {
             return !$this->isForeignPersonalTask($user, $task);
         }
 
@@ -201,12 +203,12 @@ class TaskPolicy
         }
 
         // Creator of the task can claim it
-        return $user->isAreaManager() && $task->created_by === $user->id;
+        return $user->isManagerLevel() && $task->created_by === $user->id;
     }
 
     public function delete(User $user, Task $task): bool
     {
-        if ($user->isSuperAdmin()) {
+        if ($user->isAdminLevel()) {
             return !$this->isForeignPersonalTask($user, $task);
         }
 

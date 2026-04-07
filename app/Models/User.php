@@ -93,14 +93,66 @@ class User extends Authenticatable
         return $this->role?->slug === RoleEnum::SUPERADMIN->value;
     }
 
+    public function isGerente(): bool
+    {
+        return $this->role?->slug === RoleEnum::GERENTE->value;
+    }
+
     public function isAreaManager(): bool
     {
         return $this->role?->slug === RoleEnum::AREA_MANAGER->value;
     }
 
+    public function isDirector(): bool
+    {
+        return $this->role?->slug === RoleEnum::DIRECTOR->value;
+    }
+
+    public function isLeader(): bool
+    {
+        return $this->role?->slug === RoleEnum::LEADER->value;
+    }
+
+    public function isCoordinator(): bool
+    {
+        return $this->role?->slug === RoleEnum::COORDINATOR->value;
+    }
+
     public function isWorker(): bool
     {
         return $this->role?->slug === RoleEnum::WORKER->value;
+    }
+
+    public function isAnalyst(): bool
+    {
+        return $this->role?->slug === RoleEnum::ANALYST->value;
+    }
+
+    /**
+     * SuperAdmin or Gerente level.
+     */
+    public function isAdminLevel(): bool
+    {
+        $slug = $this->role?->slug;
+        return $slug && RoleEnum::from($slug)->isAdminLevel();
+    }
+
+    /**
+     * Area Manager, Director, Leader, or Coordinator level.
+     */
+    public function isManagerLevel(): bool
+    {
+        $slug = $this->role?->slug;
+        return $slug && RoleEnum::from($slug)->isManagerLevel();
+    }
+
+    /**
+     * Worker or Analyst level.
+     */
+    public function isWorkerLevel(): bool
+    {
+        $slug = $this->role?->slug;
+        return $slug && RoleEnum::from($slug)->isWorkerLevel();
     }
 
     public function hasRole(RoleEnum $role): bool

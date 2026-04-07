@@ -43,14 +43,14 @@ class TaskController extends Controller
 
         $tasks = Task::with(['creator', 'currentResponsible', 'area', 'latestUpdate'])
             ->withCount(['comments', 'attachments'])
-            ->when($user->isSuperAdmin(), function ($q) use ($user) {
-                // Superadmin sees all organization tasks + their own personal tasks
+            ->when($user->isAdminLevel(), function ($q) use ($user) {
+                // Superadmin/Gerente sees all organization tasks + their own personal tasks
                 $q->where(function ($query) use ($user) {
                     $query->whereNotNull('area_id')
                           ->orWhere('created_by', $user->id);
                 });
             })
-            ->when(!$user->isSuperAdmin(), function ($q) use ($user) {
+            ->when(!$user->isAdminLevel(), function ($q) use ($user) {
                 $q->where(function ($query) use ($user) {
                     // 1. Personal tasks created by the user (no area)
                     $query->where(function ($q) use ($user) {
@@ -67,10 +67,13 @@ class TaskController extends Controller
                           ->whereNotIn('status', $terminalStatuses);
                     });
 
-                    if ($user->isAreaManager()) {
+                    if ($user->isManagerLevel()) {
                         // 3. Non-worker-created tasks in areas the manager currently manages
+                        $workerLevelSlugs = collect(\App\Enums\RoleEnum::workerLevel())
+                            ->map(fn ($r) => $r->value)->toArray();
+
                         $workerIds = \App\Models\User::whereHas('role', fn ($r) =>
-                            $r->where('slug', \App\Enums\RoleEnum::WORKER->value)
+                            $r->whereIn('slug', $workerLevelSlugs)
                         )->select('id');
 
                         $query->orWhere(function ($q) use ($user, $workerIds) {

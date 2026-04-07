@@ -43,8 +43,10 @@ class Area extends Model
 
     public function activeWorkers(): BelongsToMany
     {
+        $workerLevelSlugs = collect(\App\Enums\RoleEnum::workerLevel())
+            ->map(fn ($r) => $r->value)->toArray();
         return $this->activeMembers()
-            ->whereHas('role', fn ($q) => $q->where('slug', \App\Enums\RoleEnum::WORKER->value));
+            ->whereHas('role', fn ($q) => $q->whereIn('slug', $workerLevelSlugs));
     }
 
     public function tasks(): HasMany

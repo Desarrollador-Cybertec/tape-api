@@ -24,7 +24,7 @@ class AreaController extends Controller
 
         $areas = Area::with('manager')
             ->withCount('activeWorkers')
-            ->when($user->isWorker(), function ($q) use ($user) {
+            ->when($user->isWorkerLevel(), function ($q) use ($user) {
                 $q->where(function ($query) use ($user) {
                     $query->where('manager_user_id', $user->id)
                         ->orWhereHas('activeMembers', fn ($mq) => $mq->where('users.id', $user->id));

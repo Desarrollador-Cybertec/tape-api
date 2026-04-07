@@ -9,12 +9,12 @@ class MeetingPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->isSuperAdmin() || $user->isAreaManager();
+        return $user->isAdminLevel() || $user->isManagerLevel();
     }
 
     public function view(User $user, Meeting $meeting): bool
     {
-        if ($user->isSuperAdmin()) {
+        if ($user->isAdminLevel()) {
             return true;
         }
 
@@ -27,12 +27,16 @@ class MeetingPolicy
 
     public function create(User $user): bool
     {
-        return $user->isSuperAdmin() || $user->isAreaManager();
+        return $user->isAdminLevel() || $user->isManagerLevel();
     }
 
     public function update(User $user, Meeting $meeting): bool
     {
-        if ($user->isSuperAdmin()) {
+        if ($meeting->is_closed) {
+            return false;
+        }
+
+        if ($user->isAdminLevel()) {
             return true;
         }
 
@@ -42,5 +46,18 @@ class MeetingPolicy
     public function delete(User $user, Meeting $meeting): bool
     {
         return $user->isSuperAdmin();
+    }
+
+    public function close(User $user, Meeting $meeting): bool
+    {
+        if ($meeting->is_closed) {
+            return false;
+        }
+
+        if ($user->isAdminLevel()) {
+            return true;
+        }
+
+        return $meeting->created_by === $user->id;
     }
 }

@@ -8,11 +8,11 @@ class ClaimWorkerRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        if ($this->user()->isSuperAdmin()) {
+        if ($this->user()->isAdminLevel()) {
             return true;
         }
 
-        if (!$this->user()->isAreaManager()) {
+        if (!$this->user()->isManagerLevel()) {
             return false;
         }
 

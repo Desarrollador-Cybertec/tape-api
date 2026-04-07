@@ -15,6 +15,8 @@ class Meeting extends Model
         'area_id',
         'classification',
         'notes',
+        'is_closed',
+        'closed_at',
         'created_by',
     ];
 
@@ -23,6 +25,8 @@ class Meeting extends Model
         return [
             'meeting_date' => 'date',
             'classification' => MeetingClassificationEnum::class,
+            'is_closed' => 'boolean',
+            'closed_at' => 'datetime',
         ];
     }
 

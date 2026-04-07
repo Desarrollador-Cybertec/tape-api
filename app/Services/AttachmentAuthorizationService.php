@@ -9,11 +9,11 @@ class AttachmentAuthorizationService
 {
     public function canView(User $user, Attachment $attachment): bool
     {
-        if ($user->isSuperAdmin()) {
+        if ($user->isAdminLevel()) {
             return true;
         }
 
-        if ($user->isAreaManager()) {
+        if ($user->isAdminLevel() || $user->isManagerLevel()) {
             return $this->canManagerView($user, $attachment);
         }
 
@@ -22,17 +22,17 @@ class AttachmentAuthorizationService
 
     public function canDelete(User $user, Attachment $attachment): bool
     {
-        if ($user->isSuperAdmin()) {
+        if ($user->isAdminLevel()) {
             return true;
         }
 
         // Area managers can delete attachments from their areas
-        if ($user->isAreaManager() && $attachment->area_id) {
+        if (($user->isAdminLevel() || $user->isManagerLevel()) && $attachment->area_id) {
             return $user->isManagerOfArea($attachment->area_id);
         }
 
         // Area managers can delete attachments from tasks in their areas
-        if ($user->isAreaManager() && $attachment->task_id) {
+        if (($user->isAdminLevel() || $user->isManagerLevel()) && $attachment->task_id) {
             $task = $attachment->task;
             return $task && $task->area_id && $user->isManagerOfArea($task->area_id);
         }

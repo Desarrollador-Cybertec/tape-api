@@ -27,7 +27,7 @@ class TaskDelegationService
             }
 
             // Validate worker role
-            if (!$toUser->isWorker() && !$toUser->isAreaManager()) {
+            if (!$toUser->isWorkerLevel() && !$toUser->isManagerLevel()) {
                 throw ValidationException::withMessages([
                     'to_user_id' => ['El usuario destino debe ser trabajador o encargado.'],
                 ]);

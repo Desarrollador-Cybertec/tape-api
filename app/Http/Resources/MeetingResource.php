@@ -17,6 +17,8 @@ class MeetingResource extends JsonResource
             'classification' => $this->classification,
             'notes' => $this->notes,
             'creator' => new UserResource($this->whenLoaded('creator')),
+            'is_closed' => $this->is_closed,
+            'closed_at' => $this->closed_at,
             'tasks_count' => $this->whenCounted('tasks'),
             'tasks' => TaskResource::collection($this->whenLoaded('tasks')),
             'created_at' => $this->created_at,

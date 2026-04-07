@@ -66,11 +66,11 @@ class StoreTaskRequest extends FormRequest
                     return;
                 }
 
-                if ($user->isSuperAdmin()) {
-                    return; // superadmin can assign to anyone
+                if ($user->isAdminLevel()) {
+                    return; // admin level can assign to anyone
                 }
 
-                if ($user->isAreaManager()) {
+                if ($user->isManagerLevel()) {
                     if ($hasUser) {
                         $targetUserId = (int) $this->input('assigned_to_user_id');
 
@@ -98,7 +98,7 @@ class StoreTaskRequest extends FormRequest
                     return;
                 }
 
-                if ($user->isWorker()) {
+                if ($user->isWorkerLevel()) {
                     // Workers cannot assign to areas
                     if ($hasArea) {
                         $validator->errors()->add(

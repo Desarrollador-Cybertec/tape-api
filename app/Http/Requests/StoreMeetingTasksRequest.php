@@ -11,7 +11,7 @@ class StoreMeetingTasksRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()->isSuperAdmin() || $this->user()->isAreaManager();
+        return $this->user()->isAdminLevel() || $this->user()->isManagerLevel();
     }
 
     public function rules(): array
@@ -67,11 +67,11 @@ class StoreMeetingTasksRequest extends FormRequest
                         continue;
                     }
 
-                    if ($user->isSuperAdmin()) {
+                    if ($user->isAdminLevel()) {
                         continue;
                     }
 
-                    if ($user->isAreaManager() && $hasUser) {
+                    if ($user->isManagerLevel() && $hasUser) {
                         $targetUserId = (int) $task['assigned_to_user_id'];
 
                         if ($targetUserId === $user->id) {

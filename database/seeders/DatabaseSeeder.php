@@ -20,8 +20,13 @@ class DatabaseSeeder extends Seeder
     {
         // Create roles
         $superadminRole = Role::create(['name' => 'Super Administrador', 'slug' => RoleEnum::SUPERADMIN->value]);
+        $gerenteRole = Role::create(['name' => 'Gerente', 'slug' => RoleEnum::GERENTE->value]);
         $managerRole = Role::create(['name' => 'Encargado de Área', 'slug' => RoleEnum::AREA_MANAGER->value]);
+        $directorRole = Role::create(['name' => 'Director', 'slug' => RoleEnum::DIRECTOR->value]);
+        $leaderRole = Role::create(['name' => 'Líder', 'slug' => RoleEnum::LEADER->value]);
+        $coordinatorRole = Role::create(['name' => 'Coordinador', 'slug' => RoleEnum::COORDINATOR->value]);
         $workerRole = Role::create(['name' => 'Trabajador', 'slug' => RoleEnum::WORKER->value]);
+        $analystRole = Role::create(['name' => 'Analista', 'slug' => RoleEnum::ANALYST->value]);
 
         // Create superadmin
         $admin = User::factory()->create([

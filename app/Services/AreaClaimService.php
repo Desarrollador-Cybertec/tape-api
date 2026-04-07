@@ -31,7 +31,7 @@ class AreaClaimService
 
             if ($existingMembership) {
                 // Superadmin can reassign: deactivate the current membership first
-                if ($claimedBy->isSuperAdmin()) {
+                if ($claimedBy->isAdminLevel()) {
                     $existingMembership->update([
                         'is_active' => false,
                         'left_at' => now(),
@@ -44,7 +44,7 @@ class AreaClaimService
             }
 
             // Validate the claimer has authority over this area
-            if (!$claimedBy->isSuperAdmin() && !$claimedBy->isManagerOfArea($areaId)) {
+            if (!$claimedBy->isAdminLevel() && !$claimedBy->isManagerOfArea($areaId)) {
                 throw ValidationException::withMessages([
                     'area_id' => ['No tienes permiso para reclamar trabajadores en esta área.'],
                 ]);

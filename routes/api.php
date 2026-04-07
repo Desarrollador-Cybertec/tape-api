@@ -9,6 +9,7 @@ use App\Http\Controllers\ImportController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\MessageTemplateController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SystemSettingController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\UserController;
@@ -41,6 +42,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Meetings
     Route::apiResource('meetings', MeetingController::class);
     Route::post('/meetings/{meeting}/tasks', [MeetingController::class, 'storeTasks']);
+    Route::patch('/meetings/{meeting}/close', [MeetingController::class, 'close']);
 
     // Tasks
     Route::apiResource('tasks', TaskController::class);
@@ -61,6 +63,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/area/{area}', [DashboardController::class, 'byArea']);
     Route::get('/dashboard/consolidated', [DashboardController::class, 'consolidated']);
     Route::get('/dashboard/me', [DashboardController::class, 'myDashboard']);
+
+    // Roles
+    Route::get('/roles', [RoleController::class, 'index']);
+    Route::patch('/roles/{role}/toggle-active', [RoleController::class, 'toggleActive']);
 
     // ── Configuration (superadmin) ──
     Route::get('/settings', [SystemSettingController::class, 'index']);

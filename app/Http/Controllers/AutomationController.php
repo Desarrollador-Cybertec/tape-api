@@ -26,11 +26,11 @@ class AutomationController extends Controller
     {
         $user = $request->user();
 
-        if ($user->isSuperAdmin()) {
+        if ($user->isAdminLevel()) {
             return null;
         }
 
-        if ($user->isAreaManager()) {
+        if ($user->isManagerLevel()) {
             $areaIds = $user->managedAreas()->pluck('id')->toArray();
             if (empty($areaIds)) {
                 abort(403);
