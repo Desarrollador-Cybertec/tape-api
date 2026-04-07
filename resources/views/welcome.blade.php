@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>TAPE API — Documentación</title>
+    <title>S!NTyC API — Documentación</title>
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700&family=jetbrains-mono:400,500" rel="stylesheet" />
     <style>
@@ -401,7 +401,7 @@
     {{-- ── Sidebar ── --}}
     <aside class="sidebar">
         <div class="sidebar-logo">
-            <h1>TAPE API</h1>
+            <h1>S!NTyC API</h1>
             <p>v1.2 &middot; Laravel 12 &middot; Sanctum</p>
         </div>
         <nav>
@@ -455,7 +455,7 @@
 
         {{-- Hero --}}
         <div class="hero" id="overview">
-            <h1>TAPE API</h1>
+            <h1>S!NTyC API</h1>
             <p>
                 API REST para el sistema de gestión de compromisos y tareas, construida con Laravel 12 y Supabase.
                 Reemplaza el proceso manual basado en Excel, proporcionando registro individual de compromisos,
@@ -510,8 +510,8 @@ php artisan migrate --seed</code></pre>
                 <div class="card-title">Datos del seeder</div>
                 <p>
                     <strong>3 roles:</strong> superadmin, area_manager, worker<br>
-                    <strong>Superadmin:</strong> admin@tape.test / Password1<br>
-                    <strong>Manager:</strong> manager@tape.test / Password1<br>
+                    <strong>Superadmin:</strong> admin@sintyc.test / Password1<br>
+                    <strong>Manager:</strong> manager@sintyc.test / Password1<br>
                     <strong>Extras:</strong> 2 trabajadores, 1 área con membresías, 1 reunión de ejemplo
                 </p>
             </div>
@@ -567,7 +567,7 @@ php vendor/bin/phpunit --testdox</code></pre>
 Content-Type: application/json
 
 {
-    "email": "admin@tape.test",
+    "email": "admin@sintyc.test",
     "password": "Password1"
 }</code></pre>
 
@@ -577,7 +577,7 @@ Content-Type: application/json
     "user": {
         "id": 1,
         "name": "Admin",
-        "email": "admin@tape.test",
+        "email": "admin@sintyc.test",
         "role": {
             "id": 1,
             "name": "Super Administrador",
@@ -1773,7 +1773,7 @@ php vendor/bin/phpunit --testdox</code></pre>
 
         {{-- Footer --}}
         <div style="border-top:1px solid var(--border); padding-top:24px; margin-top:48px; text-align:center; color:var(--text-muted); font-size:13px;">
-            TAPE API v1.2 &middot; Laravel {{ app()->version() }} &middot; PHP {{ PHP_VERSION }}
+            S!NTyC API v1.2 &middot; Laravel {{ app()->version() }} &middot; PHP {{ PHP_VERSION }}
         </div>
 
     </main>

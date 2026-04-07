@@ -8,7 +8,7 @@
 Ver en la plataforma
 </x-mail::button>
 
-**Saludos,**  
-Sistema TAPE
+**Saludos,**
+S!NTyC
 
 </x-mail::message>

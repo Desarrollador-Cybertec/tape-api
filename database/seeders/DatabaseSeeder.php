@@ -26,7 +26,7 @@ class DatabaseSeeder extends Seeder
         // Create superadmin
         $admin = User::factory()->create([
             'name' => 'Admin',
-            'email' => 'admin@tape.test',
+            'email' => 'admin@sintyc.test',
             'password' => Hash::make('Password1'),
             'role_id' => $superadminRole->id,
         ]);
@@ -34,7 +34,7 @@ class DatabaseSeeder extends Seeder
         // Create area manager
         $manager = User::factory()->create([
             'name' => 'Manager',
-            'email' => 'manager@tape.test',
+            'email' => 'manager@sintyc.test',
             'password' => Hash::make('Password1'),
             'role_id' => $managerRole->id,
         ]);
@@ -42,14 +42,14 @@ class DatabaseSeeder extends Seeder
         // Create workers
         $worker1 = User::factory()->create([
             'name' => 'Worker 1',
-            'email' => 'worker1@tape.test',
+            'email' => 'worker1@sintyc.test',
             'password' => Hash::make('Password1'),
             'role_id' => $workerRole->id,
         ]);
 
         $worker2 = User::factory()->create([
             'name' => 'Worker 2',
-            'email' => 'worker2@tape.test',
+            'email' => 'worker2@sintyc.test',
             'password' => Hash::make('Password1'),
             'role_id' => $workerRole->id,
         ]);
