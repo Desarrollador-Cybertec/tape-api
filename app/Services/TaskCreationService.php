@@ -30,13 +30,13 @@ class TaskCreationService
                 && (int) $data['assigned_to_user_id'] === $creator->id;
             $isManagerAssignment = false;
             if (!$areaId && !empty($data['assigned_to_user_id']) && !$isSelfAssignment) {
-                // First try area_members (worker case)
+                // First try area_members (worker or manager-level member)
                 $areaId = DB::table('area_members')
                     ->where('user_id', $data['assigned_to_user_id'])
                     ->where('is_active', true)
                     ->value('area_id');
 
-                // If not found, check if the assigned user is the area manager
+                // If not found in members, check if the assigned user is the area manager
                 if (!$areaId) {
                     $managedAreaId = DB::table('areas')
                         ->where('manager_user_id', $data['assigned_to_user_id'])

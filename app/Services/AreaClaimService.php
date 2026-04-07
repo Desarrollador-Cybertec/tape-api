@@ -18,9 +18,9 @@ class AreaClaimService
             $worker = User::findOrFail($userId);
             $area = Area::findOrFail($areaId);
 
-            if (!$worker->hasRole(RoleEnum::WORKER)) {
+            if (!$worker->isWorkerLevel() && !$worker->isManagerLevel()) {
                 throw ValidationException::withMessages([
-                    'user_id' => ['El usuario debe tener rol de trabajador.'],
+                    'user_id' => ['El usuario debe tener un rol válido para pertenecer a un área.'],
                 ]);
             }
 

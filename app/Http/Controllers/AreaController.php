@@ -113,8 +113,14 @@ class AreaController extends Controller
     {
         $this->authorize('claimWorker', $area);
 
+        $workerSlugs = collect(\App\Enums\RoleEnum::workerLevel())
+            ->map(fn ($r) => $r->value)->toArray();
+        $managerSlugs = collect(\App\Enums\RoleEnum::managerLevel())
+            ->map(fn ($r) => $r->value)->toArray();
+        $assignableSlugs = array_merge($workerSlugs, $managerSlugs);
+
         $users = User::with('role')
-            ->whereHas('role', fn ($q) => $q->where('slug', 'worker'))
+            ->whereHas('role', fn ($q) => $q->whereIn('slug', $assignableSlugs))
             ->where('active', true)
             ->whereDoesntHave('activeAreas')
             ->when($request->query('search'), fn ($q, $search) =>

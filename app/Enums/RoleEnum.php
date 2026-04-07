@@ -71,6 +71,6 @@ enum RoleEnum: string
      */
     public static function configurable(): array
     {
-        return [self::GERENTE, self::DIRECTOR, self::LEADER, self::COORDINATOR, self::ANALYST];
+        return [self::GERENTE, self::DIRECTOR, self::LEADER, self::COORDINATOR, self::WORKER, self::ANALYST];
     }
 }

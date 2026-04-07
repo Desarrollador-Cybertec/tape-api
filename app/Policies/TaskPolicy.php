@@ -36,6 +36,17 @@ class TaskPolicy
             ->exists();
     }
 
+    /**
+     * Returns true if $user is a manager-level role AND is an active member of the given area.
+     */
+    private function isManagerLevelMemberOfArea(User $user, ?int $areaId): bool
+    {
+        if (!$areaId || !$user->isManagerLevel()) {
+            return false;
+        }
+        return $user->belongsToArea($areaId);
+    }
+
     public function view(User $user, Task $task): bool
     {
         if ($user->isAdminLevel()) {

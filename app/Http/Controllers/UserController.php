@@ -20,6 +20,9 @@ class UserController extends Controller
         $this->authorize('viewAny', User::class);
 
         $users = User::with('role')
+            ->when($request->user()->isGerente(), fn ($q) =>
+                $q->whereHas('role', fn ($rq) => $rq->where('slug', '!=', \App\Enums\RoleEnum::SUPERADMIN->value))
+            )
             ->when($request->query('search'), fn ($q, $search) =>
                 $q->where('name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
@@ -43,10 +46,25 @@ class UserController extends Controller
 
     public function store(StoreUserRequest $request): JsonResponse
     {
-        $user = User::create($request->validated());
+        $validated = $request->validated();
+        $areaId = $validated['area_id'] ?? null;
+        unset($validated['area_id']);
+
+        $user = User::create($validated);
+
+        if ($areaId) {
+            \App\Models\AreaMember::create([
+                'area_id' => $areaId,
+                'user_id' => $user->id,
+                'assigned_by' => $request->user()->id,
+                'claimed_by' => $request->user()->id,
+                'joined_at' => now(),
+                'is_active' => true,
+            ]);
+        }
 
         return response()->json(
-            new UserResource($user->load('role')),
+            new UserResource($user->load(['role', 'activeAreas'])),
             201
         );
     }
@@ -77,13 +95,6 @@ class UserController extends Controller
 
         \Illuminate\Support\Facades\DB::transaction(function () use ($user, $request, $newRole) {
             $user->update(['role_id' => $request->role_id]);
-
-            // When promoting to manager level, remove active worker memberships
-            if (in_array($newRole?->slug, collect(\App\Enums\RoleEnum::managerLevel())->map(fn ($r) => $r->value)->toArray())) {
-                \App\Models\AreaMember::where('user_id', $user->id)
-                    ->where('is_active', true)
-                    ->update(['is_active' => false, 'left_at' => now()]);
-            }
 
             // When demoting from manager level to worker level, remove them as manager from areas
             $managerSlugs = collect(\App\Enums\RoleEnum::managerLevel())->map(fn ($r) => $r->value)->toArray();

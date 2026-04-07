@@ -79,18 +79,24 @@ class StoreTaskRequest extends FormRequest
                             return;
                         }
 
-                        // Can only assign to workers in their managed areas
+                        // Can assign to members in their managed areas
                         $managedAreaIds = $user->managedAreas()->pluck('id');
-                        $inManagedArea = \DB::table('area_members')
+
+                        // Also can assign to members of areas they belong to
+                        $memberAreaIds = $user->activeAreas()->pluck('areas.id');
+
+                        $allowedAreaIds = $managedAreaIds->merge($memberAreaIds)->unique();
+
+                        $inAllowedArea = \DB::table('area_members')
                             ->where('user_id', $targetUserId)
                             ->where('is_active', true)
-                            ->whereIn('area_id', $managedAreaIds)
+                            ->whereIn('area_id', $allowedAreaIds)
                             ->exists();
 
-                        if (!$inManagedArea) {
+                        if (!$inAllowedArea) {
                             $validator->errors()->add(
                                 'assigned_to_user_id',
-                                'Solo puede asignar tareas a trabajadores de sus áreas o a sí mismo.'
+                                'Solo puede asignar tareas a miembros de sus áreas o a sí mismo.'
                             );
                         }
                     }

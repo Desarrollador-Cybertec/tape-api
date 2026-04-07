@@ -14,6 +14,10 @@ class UserPolicy
     public function view(User $user, User $model): bool
     {
         if ($user->isAdminLevel()) {
+            // Gerente cannot see superadmin profiles
+            if ($user->isGerente() && $model->isSuperAdmin()) {
+                return false;
+            }
             return true;
         }
 
@@ -37,6 +41,10 @@ class UserPolicy
     public function update(User $user, User $model): bool
     {
         if ($user->isAdminLevel()) {
+            // Gerente cannot edit superadmin
+            if ($user->isGerente() && $model->isSuperAdmin()) {
+                return false;
+            }
             return true;
         }
 
@@ -45,6 +53,9 @@ class UserPolicy
 
     public function updateRole(User $user, User $model): bool
     {
+        if ($user->isGerente() && $model->isSuperAdmin()) {
+            return false;
+        }
         return $user->isAdminLevel() && $user->id !== $model->id;
     }
 
@@ -55,6 +66,9 @@ class UserPolicy
 
     public function updatePassword(User $user, User $model): bool
     {
+        if ($user->isGerente() && $model->isSuperAdmin()) {
+            return false;
+        }
         return $user->isAdminLevel() && $user->id !== $model->id;
     }
 }
