@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\LoginRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Services\LicenseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -27,6 +28,9 @@ class AuthController extends Controller
                 'email' => ['Tu cuenta está desactivada.'],
             ]);
         }
+
+        // Bloquear login si la suscripcion esta vencida o el sistema no responde
+        app(LicenseService::class)->checkSubscriptionActive();
 
         $token = $user->createToken('api-token')->plainTextToken;
 

@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'subscription' => [
+        'url' => env('SUBSCRIPTION_API_URL', 'https://managed.cyberteconline.com'),
+        'key' => env('SUBSCRIPTION_API_KEY'),
+    ],
+
 ];

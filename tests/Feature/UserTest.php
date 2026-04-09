@@ -9,6 +9,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class UserTest extends TestCase
@@ -20,6 +21,16 @@ class UserTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // Fake license API calls so tests are isolated from the real Management System
+        $licenseUrl = rtrim(config('services.subscription.url', 'https://managed.cyberteconline.com'), '/');
+        Http::fake([
+            $licenseUrl . '/api/internal/authorize' => Http::response([
+                'allowed' => true, 'reason' => null, 'limit' => 10,
+                'current' => 0, 'remaining' => 10, 'status' => 'active',
+            ], 200),
+            $licenseUrl . '/api/internal/usage' => Http::response(['ok' => true], 200),
+        ]);
 
         $this->roles['superadmin'] = Role::create(['name' => 'Super Administrador', 'slug' => RoleEnum::SUPERADMIN->value]);
         $this->roles['manager'] = Role::create(['name' => 'Encargado de Área', 'slug' => RoleEnum::AREA_MANAGER->value]);

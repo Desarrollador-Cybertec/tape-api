@@ -10,6 +10,7 @@ use App\Http\Resources\UserResource;
 use App\Models\Area;
 use App\Models\User;
 use App\Services\AreaClaimService;
+use App\Services\LicenseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -41,6 +42,8 @@ class AreaController extends Controller
 
     public function store(StoreAreaRequest $request): JsonResponse
     {
+        app(LicenseService::class)->authorize('create_area', 1);
+
         $area = Area::create($request->validated());
 
         return response()->json(

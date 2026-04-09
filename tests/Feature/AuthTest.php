@@ -7,6 +7,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class AuthTest extends TestCase
@@ -15,6 +16,15 @@ class AuthTest extends TestCase
 
     private function createRoles(): void
     {
+        // Fake license API — subscription active for all auth tests by default
+        $licenseUrl = rtrim(config('services.subscription.url', 'https://managed.cyberteconline.com'), '/');
+        Http::fake([
+            $licenseUrl . '/api/internal/authorize' => Http::response([
+                'allowed' => true, 'reason' => null, 'limit' => null,
+                'current' => null, 'remaining' => null, 'status' => 'active',
+            ], 200),
+        ]);
+
         Role::create(['name' => 'Super Administrador', 'slug' => RoleEnum::SUPERADMIN->value]);
         Role::create(['name' => 'Encargado de Área', 'slug' => RoleEnum::AREA_MANAGER->value]);
         Role::create(['name' => 'Trabajador', 'slug' => RoleEnum::WORKER->value]);

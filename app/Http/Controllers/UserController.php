@@ -7,6 +7,7 @@ use App\Http\Requests\UpdateUserRequest;
 use App\Http\Resources\UserResource;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\LicenseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -46,6 +47,8 @@ class UserController extends Controller
 
     public function store(StoreUserRequest $request): JsonResponse
     {
+        app(LicenseService::class)->authorize('create_user', 1);
+
         $validated = $request->validated();
         $areaId = $validated['area_id'] ?? null;
         unset($validated['area_id']);
@@ -62,6 +65,9 @@ class UserController extends Controller
                 'is_active' => true,
             ]);
         }
+
+        // Reportar uso después de creación
+        app(LicenseService::class)->reportUserActive();
 
         return response()->json(
             new UserResource($user->load(['role', 'activeAreas'])),
@@ -113,7 +119,18 @@ class UserController extends Controller
     {
         $this->authorize('updateRole', $user);
 
+        $isReactivating = !$user->active;
+
+        if ($isReactivating) {
+            app(LicenseService::class)->authorize('reactivate_user', 1);
+        }
+
         $user->update(['active' => !$user->active]);
+
+        if ($isReactivating) {
+            // Solo reportar cuando se activa — no al desactivar
+            app(LicenseService::class)->reportUserActive();
+        }
 
         return new UserResource($user->fresh(['role', 'activeAreas']));
     }

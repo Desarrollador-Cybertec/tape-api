@@ -1,5 +1,11 @@
 <?php
 
+use App\Exceptions\LicenseDeniedException;
+use App\Exceptions\LicenseException;
+use App\Exceptions\LicenseExpiredException;
+use App\Exceptions\LicenseSuspendedException;
+use App\Exceptions\LicenseSystemUnavailableException;
+use App\Http\Middleware\CheckLicense;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -21,6 +27,10 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->throttleApi('60,1');
+
+        $middleware->alias([
+            'license' => CheckLicense::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (AuthenticationException $e, Request $request) {
@@ -33,5 +43,25 @@ return Application::configure(basePath: dirname(__DIR__))
             if ($request->expectsJson() || $request->is('api/*')) {
                 return response()->json(['message' => 'Acción no autorizada.'], 403);
             }
+        });
+
+        $exceptions->render(function (LicenseDeniedException $e, Request $request) {
+            return $e->render();
+        });
+
+        $exceptions->render(function (LicenseSuspendedException $e, Request $request) {
+            return $e->render();
+        });
+
+        $exceptions->render(function (LicenseExpiredException $e, Request $request) {
+            return $e->render();
+        });
+
+        $exceptions->render(function (LicenseSystemUnavailableException $e, Request $request) {
+            return $e->render();
+        });
+
+        $exceptions->render(function (LicenseException $e, Request $request) {
+            return $e->render();
         });
     })->create();

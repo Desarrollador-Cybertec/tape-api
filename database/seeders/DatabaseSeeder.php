@@ -18,82 +18,82 @@ class DatabaseSeeder extends Seeder
 
     public function run(): void
     {
-        // Create roles
-        $superadminRole = Role::create(['name' => 'Super Administrador', 'slug' => RoleEnum::SUPERADMIN->value]);
-        $gerenteRole = Role::create(['name' => 'Gerente', 'slug' => RoleEnum::GERENTE->value]);
-        $managerRole = Role::create(['name' => 'Encargado de Área', 'slug' => RoleEnum::AREA_MANAGER->value]);
-        $directorRole = Role::create(['name' => 'Director', 'slug' => RoleEnum::DIRECTOR->value]);
-        $leaderRole = Role::create(['name' => 'Líder', 'slug' => RoleEnum::LEADER->value]);
-        $coordinatorRole = Role::create(['name' => 'Coordinador', 'slug' => RoleEnum::COORDINATOR->value]);
-        $workerRole = Role::create(['name' => 'Trabajador', 'slug' => RoleEnum::WORKER->value]);
-        $analystRole = Role::create(['name' => 'Analista', 'slug' => RoleEnum::ANALYST->value]);
+        // Roles (idempotente via updateOrCreate)
+        $this->call(RoleSeeder::class);
+
+        $superadminRole = Role::where('slug', RoleEnum::SUPERADMIN->value)->first();
+        $managerRole    = Role::where('slug', RoleEnum::AREA_MANAGER->value)->first();
+        $workerRole     = Role::where('slug', RoleEnum::WORKER->value)->first();
 
         // Create superadmin
         $admin = User::factory()->create([
-            'name' => 'Admin',
-            'email' => 'admin@sintyc.test',
+            'name'     => 'Admin',
+            'email'    => 'admin@sintyc.test',
             'password' => Hash::make('Password1'),
-            'role_id' => $superadminRole->id,
+            'role_id'  => $superadminRole->id,
         ]);
 
         // Create area manager
         $manager = User::factory()->create([
-            'name' => 'Manager',
-            'email' => 'manager@sintyc.test',
+            'name'     => 'Manager',
+            'email'    => 'manager@sintyc.test',
             'password' => Hash::make('Password1'),
-            'role_id' => $managerRole->id,
+            'role_id'  => $managerRole->id,
         ]);
 
         // Create workers
         $worker1 = User::factory()->create([
-            'name' => 'Worker 1',
-            'email' => 'worker1@sintyc.test',
+            'name'     => 'Worker 1',
+            'email'    => 'worker1@sintyc.test',
             'password' => Hash::make('Password1'),
-            'role_id' => $workerRole->id,
+            'role_id'  => $workerRole->id,
         ]);
 
         $worker2 = User::factory()->create([
-            'name' => 'Worker 2',
-            'email' => 'worker2@sintyc.test',
+            'name'     => 'Worker 2',
+            'email'    => 'worker2@sintyc.test',
             'password' => Hash::make('Password1'),
-            'role_id' => $workerRole->id,
+            'role_id'  => $workerRole->id,
         ]);
 
         // Create area
         $area = Area::create([
-            'name' => 'Área de Desarrollo',
-            'description' => 'Equipo de desarrollo de software',
+            'name'            => 'Area de Desarrollo',
+            'description'     => 'Equipo de desarrollo de software',
             'manager_user_id' => $manager->id,
         ]);
 
         // Assign workers to area
         AreaMember::create([
-            'area_id' => $area->id,
-            'user_id' => $worker1->id,
+            'area_id'     => $area->id,
+            'user_id'     => $worker1->id,
             'assigned_by' => $admin->id,
-            'joined_at' => now(),
-            'is_active' => true,
+            'joined_at'   => now(),
+            'is_active'   => true,
         ]);
 
         AreaMember::create([
-            'area_id' => $area->id,
-            'user_id' => $worker2->id,
+            'area_id'     => $area->id,
+            'user_id'     => $worker2->id,
             'assigned_by' => $admin->id,
-            'joined_at' => now(),
-            'is_active' => true,
+            'joined_at'   => now(),
+            'is_active'   => true,
         ]);
 
         // Create sample meeting
         Meeting::create([
-            'title' => 'Reunión de kickoff',
-            'meeting_date' => now(),
-            'area_id' => $area->id,
+            'title'          => 'Reunion de kickoff',
+            'meeting_date'   => now(),
+            'area_id'        => $area->id,
             'classification' => 'operational',
-            'notes' => 'Primera reunión del equipo',
-            'created_by' => $admin->id,
+            'notes'          => 'Primera reunion del equipo',
+            'created_by'     => $admin->id,
         ]);
 
         // Seed system configuration and message templates
-        $this->call(SystemConfigSeeder::class);
+        $this->call([
+            SystemSettingSeeder::class,
+            MessageTemplateSeeder::class,
+        ]);
     }
 }
