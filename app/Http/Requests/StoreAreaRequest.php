@@ -16,6 +16,7 @@ class StoreAreaRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
+            'icon_key' => ['nullable', 'string', 'max:50'],
             'manager_user_id' => ['nullable', 'exists:users,id'],
         ];
     }

@@ -13,6 +13,7 @@ class AreaResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'description' => $this->description,
+            'icon_key' => $this->icon_key,
             'manager' => new UserResource($this->whenLoaded('manager')),
             'active' => $this->active,
             'members_count' => $this->whenCounted('activeWorkers'),

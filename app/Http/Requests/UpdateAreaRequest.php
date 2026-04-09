@@ -16,6 +16,7 @@ class UpdateAreaRequest extends FormRequest
         return [
             'name' => ['sometimes', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
+            'icon_key' => ['nullable', 'string', 'max:50'],
             'active' => ['sometimes', 'boolean'],
         ];
     }
