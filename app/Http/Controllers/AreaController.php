@@ -118,12 +118,9 @@ class AreaController extends Controller
 
         $workerSlugs = collect(\App\Enums\RoleEnum::workerLevel())
             ->map(fn ($r) => $r->value)->toArray();
-        $managerSlugs = collect(\App\Enums\RoleEnum::managerLevel())
-            ->map(fn ($r) => $r->value)->toArray();
-        $assignableSlugs = array_merge($workerSlugs, $managerSlugs);
 
         $users = User::with('role')
-            ->whereHas('role', fn ($q) => $q->whereIn('slug', $assignableSlugs))
+            ->whereHas('role', fn ($q) => $q->whereIn('slug', $workerSlugs))
             ->where('active', true)
             ->whereDoesntHave('activeAreas')
             ->when($request->query('search'), fn ($q, $search) =>
@@ -154,5 +151,25 @@ class AreaController extends Controller
             ->paginate(20);
 
         return UserResource::collection($users);
+    }
+
+    public function removeMember(Area $area, User $user): JsonResponse
+    {
+        $this->authorize('removeMember', $area);
+
+        $member = $area->activeMembers()->where('users.id', $user->id)->first();
+
+        if (!$member) {
+            return response()->json([
+                'message' => 'El usuario no es miembro activo de esta área.',
+            ], 422);
+        }
+
+        $area->activeMembers()->updateExistingPivot($user->id, [
+            'is_active' => false,
+            'left_at'   => now(),
+        ]);
+
+        return response()->json(['message' => 'Miembro desasignado del área correctamente.']);
     }
 }

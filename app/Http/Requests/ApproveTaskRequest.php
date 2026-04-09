@@ -14,7 +14,7 @@ class ApproveTaskRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'note' => ['nullable', 'string', 'max:2000'],
+            'note' => ['required', 'string', 'max:2000'],
         ];
     }
 }

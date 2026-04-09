@@ -130,6 +130,15 @@ class TaskPolicy
             return true;
         }
 
+        // Admin or area manager can start the task (e.g. after reopening it)
+        if ($user->isAdminLevel() && !$this->isForeignPersonalTask($user, $task)) {
+            return true;
+        }
+
+        if ($task->area_id && $user->isManagerOfArea($task->area_id)) {
+            return true;
+        }
+
         // External task: the creator manages it on behalf of the external contact
         return $task->external_email && $task->created_by === $user->id;
     }
@@ -138,6 +147,15 @@ class TaskPolicy
     {
         // Normal case: the current responsible submits
         if ($task->current_responsible_user_id === $user->id) {
+            return true;
+        }
+
+        // Admin or area manager can close the task (e.g. after reopening it)
+        if ($user->isAdminLevel() && !$this->isForeignPersonalTask($user, $task)) {
+            return true;
+        }
+
+        if ($task->area_id && $user->isManagerOfArea($task->area_id)) {
             return true;
         }
 

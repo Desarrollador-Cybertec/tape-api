@@ -62,4 +62,13 @@ class AreaPolicy
 
         return $area->manager_user_id === $user->id;
     }
+
+    public function removeMember(User $user, Area $area): bool
+    {
+        if ($user->isAdminLevel()) {
+            return true;
+        }
+
+        return $area->manager_user_id === $user->id;
+    }
 }

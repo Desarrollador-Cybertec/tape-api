@@ -38,6 +38,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/areas/claim-worker', [AreaController::class, 'claimWorker']);
     Route::get('/areas/{area}/available-workers', [AreaController::class, 'availableWorkers']);
     Route::get('/areas/{area}/members', [AreaController::class, 'members']);
+    Route::delete('/areas/{area}/members/{user}', [AreaController::class, 'removeMember']);
 
     // Meetings
     Route::apiResource('meetings', MeetingController::class);

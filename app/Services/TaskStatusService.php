@@ -69,9 +69,18 @@ class TaskStatusService
         });
     }
 
-    public function start(Task $task, User $user): Task
+    public function start(Task $task, User $user, string $note): Task
     {
-        return $this->transition($task, TaskStatusEnum::IN_PROGRESS, $user, 'Tarea iniciada');
+        return DB::transaction(function () use ($task, $user, $note) {
+            TaskComment::create([
+                'task_id' => $task->id,
+                'user_id' => $user->id,
+                'comment' => $note,
+                'type'    => \App\Enums\CommentTypeEnum::PROGRESS,
+            ]);
+
+            return $this->transition($task, TaskStatusEnum::IN_PROGRESS, $user, 'Tarea iniciada');
+        });
     }
 
     public function cancel(Task $task, User $user, string $reason): Task

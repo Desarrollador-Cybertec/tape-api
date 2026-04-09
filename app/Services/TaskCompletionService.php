@@ -18,38 +18,45 @@ class TaskCompletionService
         private TaskStatusService $statusService,
     ) {}
 
-    public function submitForReview(Task $task, User $user): Task
+    public function submitForReview(Task $task, User $user, string $note): Task
     {
         $this->validateRequirements($task);
 
-        if ($task->requires_manager_approval) {
+        return DB::transaction(function () use ($task, $user, $note) {
+            TaskComment::create([
+                'task_id' => $task->id,
+                'user_id' => $user->id,
+                'comment' => $note,
+                'type'    => CommentTypeEnum::COMPLETION_NOTE,
+            ]);
+
+            if ($task->requires_manager_approval) {
+                return $this->statusService->transition(
+                    $task,
+                    TaskStatusEnum::IN_REVIEW,
+                    $user,
+                    'Enviada a revisión'
+                );
+            }
+
             return $this->statusService->transition(
                 $task,
-                TaskStatusEnum::IN_REVIEW,
+                TaskStatusEnum::COMPLETED,
                 $user,
-                'Enviada a revisión'
+                'Tarea completada'
             );
-        }
-
-        return $this->statusService->transition(
-            $task,
-            TaskStatusEnum::COMPLETED,
-            $user,
-            'Tarea completada'
-        );
+        });
     }
 
-    public function approve(Task $task, User $approver, ?string $note = null): Task
+    public function approve(Task $task, User $approver, string $note): Task
     {
         return DB::transaction(function () use ($task, $approver, $note) {
-            if ($note) {
-                TaskComment::create([
-                    'task_id' => $task->id,
-                    'user_id' => $approver->id,
-                    'comment' => $note,
-                    'type' => CommentTypeEnum::COMPLETION_NOTE,
-                ]);
-            }
+            TaskComment::create([
+                'task_id' => $task->id,
+                'user_id' => $approver->id,
+                'comment' => $note,
+                'type' => CommentTypeEnum::COMPLETION_NOTE,
+            ]);
 
             return $this->statusService->transition(
                 $task,

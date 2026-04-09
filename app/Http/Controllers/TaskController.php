@@ -197,20 +197,28 @@ class TaskController extends Controller
         return new TaskResource($task->load(['currentResponsible', 'delegator', 'area', 'latestUpdate']));
     }
 
-    public function start(Task $task, TaskStatusService $service): TaskResource
+    public function start(Request $request, Task $task, TaskStatusService $service): TaskResource
     {
         $this->authorize('start', $task);
 
-        $task = $service->start($task, request()->user());
+        $validated = $request->validate([
+            'comment' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $task = $service->start($task, $request->user(), $validated['comment']);
 
         return new TaskResource($task->load(['currentResponsible', 'area', 'latestUpdate']));
     }
 
-    public function submitForReview(Task $task, TaskCompletionService $service): TaskResource
+    public function submitForReview(Request $request, Task $task, TaskCompletionService $service): TaskResource
     {
         $this->authorize('submitForReview', $task);
 
-        $task = $service->submitForReview($task, request()->user());
+        $validated = $request->validate([
+            'comment' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $task = $service->submitForReview($task, $request->user(), $validated['comment']);
 
         return new TaskResource($task->load(['currentResponsible', 'area', 'latestUpdate']));
     }
@@ -248,7 +256,7 @@ class TaskController extends Controller
 
         $task = $service->cancel($task, $request->user(), $validated['comment']);
 
-        return new TaskResource($task->load(['currentResponsible', 'area', 'latestUpdate']));
+        return new TaskResource($task->load(['currentResponsible', 'area', 'latestUpdate', 'statusHistory.changedByUser', 'statusHistory.responsibleUser']));
     }
 
     public function reopen(Request $request, Task $task, TaskStatusService $service): TaskResource
@@ -261,7 +269,7 @@ class TaskController extends Controller
 
         $task = $service->reopen($task, $request->user(), $validated['comment']);
 
-        return new TaskResource($task->load(['currentResponsible', 'area', 'latestUpdate']));
+        return new TaskResource($task->load(['currentResponsible', 'area', 'latestUpdate', 'statusHistory.changedByUser', 'statusHistory.responsibleUser']));
     }
 
     public function comment(StoreTaskCommentRequest $request, Task $task): JsonResponse
