@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Notifications\TaskDueSoonNotification;
 use App\Notifications\TaskOverdueNotification;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 
 class SendDueReminders extends Command
 {
@@ -42,6 +43,9 @@ class SendDueReminders extends Command
             $user = User::find($task->current_responsible_user_id);
             if (!$user) continue;
 
+            // Skip if already notified today for this task
+            if ($this->alreadyNotifiedToday($user->id, $task->id, 'task_due_soon')) continue;
+
             $daysLeft = (int) now()->startOfDay()->diffInDays($task->due_date, false);
             $user->notify(new TaskDueSoonNotification($task, $daysLeft));
             $count++;
@@ -62,6 +66,9 @@ class SendDueReminders extends Command
             $user = User::find($task->current_responsible_user_id);
             if (!$user) continue;
 
+            // Skip if already notified today for this task
+            if ($this->alreadyNotifiedToday($user->id, $task->id, 'task_overdue')) continue;
+
             $daysOverdue = (int) $task->due_date->diffInDays(now());
             $user->notify(new TaskOverdueNotification($task, $daysOverdue));
             $count++;
@@ -70,5 +77,16 @@ class SendDueReminders extends Command
         $this->info("Se enviaron {$count} recordatorios.");
 
         return self::SUCCESS;
+    }
+
+    private function alreadyNotifiedToday(int $userId, int $taskId, string $type): bool
+    {
+        return DB::table('notifications')
+            ->where('notifiable_type', User::class)
+            ->where('notifiable_id', $userId)
+            ->whereDate('created_at', today())
+            ->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(data, '$.type')) = ?", [$type])
+            ->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(data, '$.task_id')) = ?", [$taskId])
+            ->exists();
     }
 }
